@@ -309,12 +309,13 @@ Notice what the body does *not* contain: the price. The client says what it want
                      ▼                                ▼                              ▼
     Database: BEGIN; lock the stock      Payment API: charge, with          Cache: drop the stale
     row; insert order + outbox row;      a timeout and the                  stock entry (24)
-    COMMIT (15–22); mark PAID (24)       idempotency key (23)
+    COMMIT (15–22); record the           idempotency key (23)
+    payment result (24)
                      │
                      ▼  (after the response, asynchronously)
-    Outbox relay ──► Queue/log ──► Worker sends the confirmation email (31–32)
+    Outbox relay ──► Queue/log ──► Worker sends the "order received" email (31–32)
 
- Response: App ──201 Created (25–28)──► Edge ──(29)──► Browser shows "Order placed" (30)
+ Response: App ──201 Created + order status (25–28)──► Edge ──(29)──► Browser shows that status (30)
 ```
 
 ### Phase 1: The client and the network (Chapters 6–9)
@@ -366,7 +367,7 @@ If the browser already has an open connection to this host, steps 3–5 are skip
 SELECT price FROM products WHERE id = $1;
 UPDATE inventory SET stock = stock - $2 WHERE product_id = $1 AND stock >= $2;  -- 0 rows → out of stock
 INSERT INTO orders (user_id, product_id, quantity, unit_price, status)
-     VALUES ($3, $1, $2, <price read above>, 'PENDING');
+     VALUES ($3, $1, $2, <price read above>, 'PENDING');  -- order exists; payment not yet confirmed
 INSERT INTO outbox (event_type, payload) VALUES ('OrderPlaced', '{"orderId": ...}');
 ```
 
@@ -375,20 +376,36 @@ INSERT INTO outbox (event_type, payload) VALUES ('OrderPlaced', '{"orderId": ...
 | Step | What happens | Chapter |
 |---|---|---|
 | 23 | The backend, now acting as a *client*, calls the payment provider over HTTPS with a timeout and the same idempotency key. If the call times out, the outcome is unknown (Section 1.2): the card may or may not have been charged. | 13, 24 |
-| 24 | A second, short transaction marks the order `PAID`, and the cached stock count for product 42 is invalidated. | 17, 21 |
+| 24 | A second, short transaction records what step 23 learned (`PAID`, `PAYMENT_FAILED`, or no change if the outcome is unknown; see the table below), and the cached stock count for product 42 is invalidated. | 17, 21 |
 | 25 | The internal order object is mapped to a response shape (a **DTO**, data transfer object) so the API contract stays independent of the database schema, then serialized to JSON. | 12 |
-| 26 | The server writes `201 Created`, a `Location` header naming the new order, and the JSON body. | 7, 10 |
+| 26 | The server writes `201 Created`, a `Location` header naming the new order, and the JSON body, which includes the order's `status`. `201` means only that the **order resource now exists**; whether it is paid is in `status`. | 7, 10 |
 | 27 | The response passes back through middleware (e.g. adding headers, logging). | 10 |
 | 28 | The bytes are written to the connection. The thread (or event-loop slot) is free for the next request. | 11 |
 | 29 | The proxy and load balancer relay the response to the client. | 10 |
-| 30 | The browser parses the JSON, and JavaScript shows "Order placed". | 9 |
+| 30 | The browser parses the JSON, and JavaScript shows a message that matches `status` (table below), not a blanket "Order placed". | 9 |
+
+"Order placed" hides three separate facts, which become true at different times and are recorded separately:
+
+- **Order created:** the order row exists, with the price the server chose (step 21's commit). The `201` reports this.
+- **Payment confirmed:** the provider has said the charge succeeded (steps 23–24). Only then is the status `PAID`.
+- **Order fulfilled:** the goods have been shipped. A different process records this later; nothing in this request does.
+
+What the client receives depends on how step 23 ended:
+
+| Payment call (step 23) | Status recorded (step 24) | Response body | What the user sees |
+|---|---|---|---|
+| Provider confirms the charge | `PAID` | `201`, `"status": "PAID"` | "Order confirmed" |
+| Provider declines the card | `PAYMENT_FAILED`; the reserved stock is returned | `201`, `"status": "PAYMENT_FAILED"` | "Payment declined; try another card" |
+| Timeout or lost connection: **outcome unknown** | Stays `PENDING`. A background job later asks the provider about this idempotency key and moves the order to `PAID` or `PAYMENT_FAILED` | `201`, `"status": "PENDING"` | "Order received; we are confirming your payment" |
+
+The third row is the honest answer to an unknown outcome. Telling the user "paid" could be false, and telling them "failed, try again" could lead to a second charge. Which status codes and response shapes an API should use for each case is a design decision covered in Chapter 13; resolving unknown outcomes is covered in Chapters 24 and 25.
 
 ### Phase 6: After the response (Chapter 25)
 
 | Step | What happens | Chapter |
 |---|---|---|
 | 31 | A relay process reads the outbox row and publishes `OrderPlaced` to a message queue or log. | 25 |
-| 32 | A background worker consumes the event and sends the confirmation email. It can receive the same event twice (at-least-once delivery), so the send must be safe to repeat. | 25 |
+| 32 | A background worker consumes the event and sends an "order received" email. (`OrderPlaced` means the order was created, not that it was paid; a "payment confirmed" email would be triggered by a separate event written when the order becomes `PAID`.) The worker can receive the same event twice (at-least-once delivery), so the send must be safe to repeat. | 25 |
 
 Why is the card charged *after* the commit rather than inside the transaction? Holding a transaction, and its row lock, open across a slow call to a third party would make every other buyer of that product wait. Ordering these steps safely, and recovering when step 23 times out, is the subject of Chapters 13, 17, 24 and 25.
 
@@ -522,7 +539,7 @@ A strong answer must mention:
 - Edge (LB/proxy) → application process → middleware (session, CSRF, authentication, authorization) → handler → validation → idempotency-key check.
 - One transaction: a conditional stock update under a row lock, the order insert and an outbox event, then a commit made durable by the database's log.
 - The payment provider is called after the commit, with a timeout and the idempotency key; a timeout means the outcome is unknown.
-- `201 Created` goes back to the browser; the email is sent later by a worker that must tolerate duplicate events.
+- `201 Created` means the order exists; its `status` says whether payment is confirmed (`PAID`), declined, or still `PENDING` because the outcome is unknown. The email is sent later by a worker that must tolerate duplicate events.
 *Common weak answer:* "The browser sends the order to the server, which saves it in the database." It skips the network setup, the trust boundary (who decides the price), duplicate protection and the unknown outcome of the payment call.
 
 **Q11. What is a trust boundary?**
