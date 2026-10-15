@@ -97,7 +97,7 @@ Concurrency guarantees nothing about the *order* in which the steps of different
 
 ### Failure and diagnosis
 
-The typical failure of the concurrency-for-I/O argument is an unbounded number of concurrent tasks. Each task costs memory (a thread stack, buffers), and each one usually holds or waits for a downstream resource (a database connection). Past some point, more concurrency increases latency without increasing throughput. The symptom is rising latency and memory with flat throughput; the evidence is the number of in-flight tasks (threads in a thread dump, pending futures) against throughput. The capacity model for this, Little's Law, is in Chapter 11.
+The typical failure of the concurrency-for-I/O argument is an unbounded number of concurrent tasks. Each task costs memory (a thread stack, buffers), and each one usually holds or waits for a downstream resource (a database connection). Past some point, more concurrency increases latency without increasing throughput. The symptom is rising latency and memory with flat throughput; the evidence is the number of in-flight tasks (threads in a **thread dump**, which is a snapshot of every thread's state and current stack, Section 5.14; or the number of pending tasks) against throughput. The capacity model for this, Little's Law, is in Chapter 11.
 
 The typical failure of the parallelism argument is a program that uses many threads but is limited by one lock or one shared resource, so that CPU usage never exceeds about one core regardless of the core count. The evidence is per-thread CPU (`top -H`, Chapter 3, Section 3.19) showing threads mostly blocked, and a lock-contention profile (Section 5.14).
 
@@ -113,7 +113,7 @@ A web server is concurrent for reason 1 (requests spend most of their time waiti
 
 **Shared mutable state** is data that more than one concurrent task can access, where at least one of them writes it. A **race condition** is a bug in which the correctness of a program depends on the relative timing or interleaving of concurrent operations on shared state, so that some interleavings produce a wrong result. A **critical section** is a section of code that accesses shared state and must not be executed by more than one task at a time if the program is to be correct.
 
-A related but distinct term: a **data race** is two accesses to the same memory location from different threads, at least one of them a write, that are not ordered by synchronisation. Section 5.3 makes "ordered by synchronisation" precise. Every data race is a bug in languages with a memory model (Section 5.3); not every race condition is a data race (a check-then-act race between two properly locked operations is a race condition with no data race).
+A related but distinct term: a **data race** is two accesses to the same memory location from different threads, at least one of them a write, that are not ordered by synchronisation. Section 5.3 makes "ordered by synchronisation" precise. A data race is almost always a bug (in C and C++ it is undefined behaviour; Section 5.3); not every race condition is a data race (a check-then-act race between two properly locked operations is a race condition with no data race).
 
 ### Why it exists
 
@@ -502,7 +502,7 @@ Memory-model bugs are among the hardest to find, because:
 - they often appear only after JIT compilation, i.e. after warm-up under load;
 - adding a `print` statement usually "fixes" them, because printing involves locks (output streams are synchronised) that create happens-before edges.
 
-Symptoms: a thread that never notices a flag (hang on shutdown, a worker that never stops; a thread dump shows it RUNNABLE in a loop, not BLOCKED), an object observed with default field values (a `NullPointerException` on a field that the constructor always sets), a counter that is stale for a long time. Evidence: the code review question "which happens-before edge orders this write before that read?"; for C, C++ and Go, a race detector (ThreadSanitizer, `go test -race`, Section 5.14) that reports the racing pair of accesses; for Java, a concurrency stress harness such as OpenJDK's jcstress, which runs litmus tests millions of times and counts the outcomes.
+Symptoms: a thread that never notices a flag (hang on shutdown, a worker that never stops; a thread dump shows it RUNNABLE in a loop, not BLOCKED), an object observed with default field values (a null-reference error on a field that the constructor always sets), a counter that is stale for a long time. Evidence: the code review question "which happens-before edge orders this write before that read?"; for C, C++ and Go, a race detector (ThreadSanitizer, `go test -race`, Section 5.14) that reports the racing pair of accesses; for Java, a concurrency stress harness such as OpenJDK's jcstress, which runs litmus tests millions of times and counts the outcomes.
 
 ### Backend connection
 
@@ -675,7 +675,7 @@ An atomic RMW instruction guarantees that the read and write of *one* memory loc
 ### Failure and diagnosis
 
 - **Spinlock CPU burn:** threads at 100% CPU doing no useful work. A CPU profile shows time inside the lock's spin loop (or `PAUSE` instructions); `perf top` shows a hot loop in a lock function.
-- **CAS contention collapse:** throughput of a shared atomic counter falls as you add cores. A CPU profile shows the time in the CAS loop; hardware counters (`perf stat`) show many cache misses on one line. Fix: per-thread or striped counters (`LongAdder`), or batch updates.
+- **CAS contention collapse:** throughput of a shared atomic counter falls as you add cores. A CPU profile shows the time in the CAS loop; hardware counters (`perf stat`) show many cache misses on one line. Fix: per-thread or striped counters (Section 5.9), or batch updates.
 - **ABA:** crashes or corrupted lists in hand-written lock-free code in languages without garbage collection, usually rare and load-dependent. Evidence comes from memory-safety tools such as AddressSanitizer (which reports use-after-free) or from model checking. The practical prevention is to use a well-tested library rather than writing your own.
 
 ### Backend connection
@@ -1040,7 +1040,7 @@ A semaphore guarantees that the number of successful `wait`s never exceeds the i
 
 ### Backend connection
 
-These primitives are rarely written by hand in application code, but you use them constantly: a connection pool is a semaphore plus a list of connections; a blocking queue between request threads and background workers is a mutex plus two condition variables; "wait until the server has finished starting" is a latch. Knowing the mechanism lets you read a thread dump: "8 threads `WAITING (parking)` in `Semaphore.acquire` inside the HTTP client" means the client's connection limit is the bottleneck, not the CPU.
+These primitives are rarely written by hand in application code, but you use them constantly: a connection pool is a semaphore plus a list of connections; a blocking queue between request threads and background workers is a mutex plus two condition variables; "wait until the server has finished starting" is a latch. Knowing the mechanism lets you read a thread dump: eight threads all waiting to acquire the HTTP client's connection semaphore means the client's connection limit is the bottleneck, not the CPU.
 
 ---
 
@@ -1285,6 +1285,14 @@ philosopher(i):
 **Fix 4: try and back off.** Pick up the left fork, *try* to pick up the right (`tryLock`); if it fails, put the left one down and try again later. This breaks hold-and-wait, but if all philosophers do it in lockstep they can pick up and put down forever: a **livelock** (Section 5.8). Randomised back-off makes this unlikely.
 
 Starvation is a separate question: even without deadlock, a philosopher whose neighbours eat alternately could be unlucky forever. Fair locks or explicit queueing address it.
+
+### Guarantees and non-guarantees
+
+The bounded buffer, built either way, guarantees that no item is lost or duplicated, that producers wait while it is full and consumers while it is empty, and that its indices are never corrupted. It does **not** guarantee the order in which waiting producers or consumers are served (that depends on the fairness of the underlying lock or semaphore), or that consumers keep up: a full buffer slows producers, which is the point. The reader-preference solution guarantees maximum reader concurrency and does not guarantee that a writer ever runs; the turnstile version bounds writer waiting only if its semaphore is FIFO. Resource ordering guarantees the philosophers cannot deadlock; it does not guarantee that each philosopher eats, which needs fairness as well.
+
+### Backend connection
+
+These three problems are the shapes of everyday backend code. Producer–consumer is every work queue between request threads and background workers, and its capacity is the first form of backpressure (Chapter 11). Readers–writers is every read-mostly in-memory structure (configuration, routing tables, caches), where a careless policy lets constant reads starve the refresh. Dining philosophers is every operation that needs two resources at once (two accounts, two inventory rows, two connections from the same pool), and its fix, a global acquisition order, is the same one used to prevent database deadlocks (Chapter 17).
 
 ---
 
@@ -1555,7 +1563,7 @@ push(value):
             return
 ```
 
-`pop` is the CAS loop shown in Section 5.4, with its ABA hazard. A lock-free FIFO queue (the **Michael–Scott queue**, the basis of many library queues, including Java's `ConcurrentLinkedQueue`) uses two pointers, `head` and `tail`, and a technique called **helping**: if a thread finds `tail` lagging behind (another thread linked a node but has not yet advanced `tail`), it advances `tail` itself before trying its own operation, so that a delayed thread can never block the others.
+`pop` is the CAS loop shown in Section 5.4, with its ABA hazard. A lock-free FIFO queue (the **Michael–Scott queue**, the basis of many library queues) uses two pointers, `head` and `tail`, and a technique called **helping**: if a thread finds `tail` lagging behind (another thread linked a node but has not yet advanced `tail`), it advances `tail` itself before trying its own operation, so that a delayed thread can never block the others.
 
 **Wait-free** algorithms usually need more machinery: each thread announces its operation in a shared array, and all threads help complete pending announced operations, so that every operation finishes in bounded steps. Some simple operations are wait-free in hardware: fetch-and-add on x86 always completes in one instruction, so an atomic counter incremented with `fetch_and_add` is wait-free, while the same counter incremented with a CAS loop is only lock-free (a thread can lose the CAS race repeatedly).
 
@@ -1660,7 +1668,7 @@ if not cache.contains(key):
 
 // RIGHT: one atomic operation does the check and the act
 value = cache.compute_if_absent(key, k -> load(k))
-// e.g. Java ConcurrentHashMap.computeIfAbsent, putIfAbsent, merge
+// most concurrent maps also offer put_if_absent and merge
 ```
 
 A caution: atomic compound operations usually hold an internal lock (on the bucket) while running your function, so the function must be short and must not modify the same map; a slow `load` (a database call) inside `compute_if_absent` blocks every other access to that bucket.
@@ -1832,7 +1840,7 @@ A pool guarantees an upper bound on the number of threads running its tasks, and
 | Pool too large | High context-switch rate, throttling, downstream overload | `vmstat` `cs` high (Chapter 3, Section 3.19); database at its connection limit |
 | Thread-starvation deadlock | Pool hangs completely, CPU near zero | Thread dump: every worker waiting on a `Future` whose task is in the same pool's queue |
 | Swallowed task exceptions | Jobs "silently don't happen" | No error logs; `Future`s never inspected; a rejection or error counter would have shown it |
-| Pool created per request | Thread count grows without limit; "unable to create native thread" errors | Thread count metric; thread dump with thousands of `pool-N-thread-1` names |
+| Pool created per request | Thread count grows without limit; thread creation starts failing | Thread count metric; thread dump with thousands of near-identical auto-generated pool thread names |
 
 ### Backend connection
 
@@ -2199,7 +2207,9 @@ How to take one:
 | Python | `py-spy dump --pid <pid>` (external sampling tool); `faulthandler.dump_traceback()` from inside |
 | Native (C, C++, Rust) | `gdb -p <pid> -batch -ex "thread apply all bt"`, or `eu-stack -p <pid>` |
 
-**JVM thread states**, and what they usually mean:
+#### Java lens: reading a JVM thread dump
+
+JVM dumps carry the most lock information of the runtimes above, so they make a good worked example. The JVM's thread states, and what they usually mean:
 
 | State | Meaning | Typical cause in a server |
 |---|---|---|
@@ -2237,12 +2247,14 @@ Found one Java-level deadlock:
 
 Reading it: worker 7 holds account `...2d88` and wants `...2e10`; worker 3 holds `...2e10` and wants `...2d88`. That is the two-account transfer of Section 5.8, and the fix is lock ordering by account ID. The JVM finds this cycle for monitors and `java.util.concurrent` locks; it cannot see deadlocks involving other resources (a database row lock, a connection pool, a future waiting on a full pool).
 
-**Triage method.** Take three dumps a few seconds apart, then:
+#### Triage method (any runtime)
+
+Take three dumps a few seconds apart, then:
 
 1. **Group threads by identical stack** (tools and simple scripts can do this). One stack shared by 190 of 200 request threads is your answer to "where are they all?".
-2. **Separate stuck from busy.** A thread with the same stack in all three dumps is stuck (or doing one very long thing); a RUNNABLE thread whose stack changes is working.
-3. **For BLOCKED/WAITING threads, find the holder.** Search the dump for the thread that "locked" the address they are "waiting to lock", and see what *it* is doing. Often it is in a socket read: a lock held during I/O (Section 5.5).
-4. **For WAITING threads on a pool or semaphore,** compare the number of waiters with the pool's size: a connection pool of 10 with 190 waiters is pool exhaustion (Chapter 18), not a CPU problem.
+2. **Separate stuck from busy.** A thread with the same stack in all three dumps is stuck (or doing one very long thing); a running thread whose stack changes is working.
+3. **For threads waiting on a lock, find the holder.** Search the dump for the thread that holds the lock they are waiting for, and see what *it* is doing. Often it is in a socket read: a lock held during I/O (Section 5.5).
+4. **For threads waiting on a pool or semaphore,** compare the number of waiters with the pool's size: a connection pool of 10 with 190 waiters is pool exhaustion (Chapter 18), not a CPU problem.
 
 ### Lock-contention profiling
 
@@ -2486,13 +2498,13 @@ A strong answer must mention:
 **Lab 1: The money-transfer service that freezes**
 - *Symptom:* a payments service occasionally stops processing transfers. The health check (on a separate thread pool) still passes. Transfer requests time out at the load balancer after 30 seconds. CPU usage on the instance drops to about 2%. Restarting fixes it for a few hours or days.
 - *Hypotheses:* (a) the database is slow or locked (Chapter 17); (b) the request pool is exhausted waiting for a dependency; (c) an in-process deadlock.
-- *Evidence:* database metrics show no increase in query latency and no lock waits, so (a) is unlikely. Three `jcmd <pid> Thread.print` dumps taken 5 s apart show all 64 `transfer-worker` threads with identical stacks in all three: 62 `BLOCKED` in `TransferService.transfer`, waiting to lock various `Account` monitors; at the end of the dump, "Found one Java-level deadlock" names `transfer-worker-12` (holds account 881, wants 1204) and `transfer-worker-40` (holds 1204, wants 881). The other 62 threads wait for one of those two accounts or for accounts held by threads waiting on them.
+- *Evidence:* database metrics show no increase in query latency and no lock waits, so (a) is unlikely. Three `jcmd <pid> Thread.print` dumps taken 5 s apart show all 64 `transfer-worker` threads with identical stacks in all three, every one `BLOCKED` in `TransferService.transfer`, waiting to lock various `Account` monitors; at the end of the dump, "Found one Java-level deadlock" names `transfer-worker-12` (holds account 881, wants 1204) and `transfer-worker-40` (holds 1204, wants 881). The other 62 threads wait for one of those two accounts or for accounts held by threads waiting on them.
 - *Root cause:* `transfer(from, to)` locks `from` then `to`. Two simultaneous transfers in opposite directions between the same pair of accounts (a refund issued while a payment was being processed) created a circular wait. Every later transfer touching those accounts queued behind them until the pool was exhausted.
 - *Fix:* acquire the two account locks in a global order (lower account ID first). Better still, move the balance update into the database with a single transaction that updates the two rows in primary-key order, so that multi-instance deployments are also correct.
 - *Prevention:* a code rule that any code taking more than one lock documents and follows the order; `tryLock` with a timeout on multi-lock paths so a missed case turns into a failed request with a clear log line rather than a frozen service; a scheduled check that calls the JVM's deadlock detection (`ThreadMXBean.findDeadlockedThreads()`) and alerts; an alert on "request pool fully busy for more than N seconds".
 
 **Lab 2: The cache that made everything slower**
-- *Symptom:* after adding an in-process cache for product data, a catalogue service's throughput plateaus at about 9,000 requests/second on a 16-core machine, with CPU usage around 35%. Before the cache, it was 7,000 requests/second at 90% CPU, limited by the database. Adding more instances helps linearly; adding cores to one instance does not.
+- *Symptom:* after adding an in-process cache for product data, a catalogue service's throughput plateaus at about 9,000 requests/second on a 16-core machine, with CPU usage around 35%. Before the cache, it handled 7,000 requests/second, with the database as the bottleneck. Adding more instances helps linearly; adding cores to one instance does not.
 - *Hypotheses:* (a) GC pauses (Chapter 2); (b) lock contention in the cache; (c) the network or the load balancer.
 - *Evidence:* GC logs show short, infrequent pauses: not (a). Thread dumps show 20–40 of the 64 request threads `BLOCKED` on the same monitor, `ProductCache.get`, at any moment. A JFR recording shows `jdk.JavaMonitorEnter` events with a total blocked time per minute larger than the total running time, all on `ProductCache`. Code: `get` is a `synchronized` method that also updates an LRU list (moving the entry to the front) on every read, and, on a miss, loads from the database *while holding the lock*.
 - *Root cause:* a coarse-grained lock serialising every read, and held across a database call on misses. On average the lock is held about 100 µs per request (most hits are short, but misses hold it for milliseconds), capping throughput near 1 s / 100 µs ≈ 10,000 requests per second regardless of cores (Section 5.5).
