@@ -41,7 +41,7 @@ These mechanisms are behind some of the most common production incidents: "Too m
 
 **Scope.** Here: file descriptors, filesystems, the page cache and durability, I/O models, the socket system calls, zero-copy, inter-process communication, resource limits, and isolation with virtual machines, namespaces and cgroups. Processes, signals, the scheduler, virtual memory and the OOM killer were taught in Chapter 3 and are only recalled. Race conditions, locks and the programming model of event loops (callbacks, futures, coroutines) are in Chapter 5. TCP itself (the handshake, retransmission, `TIME_WAIT`, ports) is in Chapter 6. How a server combines these system calls into an accept → parse → dispatch pipeline is in Chapter 10, and how it sizes its thread pools is in Chapter 11. How a database uses `fsync`, the write-ahead log and its own buffer pool is in Chapter 15. Container orchestration is in Chapter 26.
 
-**Classic textbook topics.** Section 4.13 covers topics that operating-systems courses and campus interviews ask about: disk scheduling algorithms, file allocation methods, free-space management and RAID levels.
+**Placement-round topics.** Section 4.13 covers topics asked mainly in campus placement rounds and exams: disk scheduling algorithms, file allocation methods, free-space management and RAID levels.
 
 ---
 
@@ -1661,9 +1661,11 @@ For listening sockets, remember: `Recv-Q` = current accept queue length, `Send-Q
 
 `df -h` and `df -i` (space and inodes per filesystem), `du -sh <dir>` (space used by files that still have names), `free -m` and `/proc/meminfo` (page cache and dirty data), `/proc/<pid>/fd` and `/proc/<pid>/limits` (FDs and limits), and the cgroup files `cpu.stat`, `memory.events`, `memory.stat` and `pids.current` (Section 4.10).
 
-## 4.13 Classic Textbook Topics: Disk Scheduling, File Allocation, Free Space, and RAID
+## 4.13 Placement-Round Topics: Disk Scheduling, File Allocation, Free Space, and RAID
 
-These four topics are standard in operating-systems courses, campus placement interviews and written tests. Modern storage has changed how much they matter in production (SSDs have no moving head; filesystems use extents; clouds hide RAID inside virtual disks), but you are expected to explain them, and each one still explains a real backend behaviour.
+> **Placement-round topics.** This section is for campus placement rounds, university exams and written tests, where these topics are asked often. Backend and product-company interviews rarely ask them, and production systems rarely depend on them. **Give your main focus to Sections 4.1–4.12**; read this section before placement rounds and come back to it for revision. Where a topic does connect to real backend work, its "Backend connection" says so.
+
+Modern storage has reduced how much these topics matter in production: SSDs have no moving head, filesystems use extents, and clouds hide RAID inside virtual disks.
 
 ### Disk scheduling
 
@@ -1860,7 +1862,7 @@ A TCP server calls `socket`, `bind`, `listen` and `accept`; the kernel completes
 
 **Rlimits** cap FDs and threads per process; "Too many open files" is `EMFILE`, and it is a different failure from pool or port exhaustion. **Containers** are ordinary processes, given private views of PIDs, networks, mounts and hostnames by **namespaces**, held to CPU quotas, memory limits and PID counts by **cgroups**, and run from layered **images**. They share the host kernel, which makes them light and fast to start and also less isolated than **VMs**, which run their own kernels on a hypervisor using hardware virtualisation. Finally, a well-run server in a container is the process that receives `SIGTERM`, keeps serving while load balancers catch up, drains, closes its pools, flushes and exits before the grace period ends.
 
-Section 4.13 adds the classic textbook topics. Disk scheduling (FCFS, SSTF, SCAN, LOOK and their circular forms) reduces seek time on HDDs at the risk of starvation. Files are allocated contiguously, as linked blocks, or through index blocks such as the inode's direct and indirect pointers, and free space is tracked with bitmaps or lists. RAID levels trade capacity for speed and for surviving disk failures, and never replace backups.
+Section 4.13 adds the placement-round topics. Disk scheduling (FCFS, SSTF, SCAN, LOOK and their circular forms) reduces seek time on HDDs at the risk of starvation. Files are allocated contiguously, as linked blocks, or through index blocks such as the inode's direct and indirect pointers, and free space is tracked with bitmaps or lists. RAID levels trade capacity for speed and for surviving disk failures, and never replace backups.
 
 ---
 

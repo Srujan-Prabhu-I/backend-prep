@@ -44,7 +44,7 @@ This chapter opens the box. Most failures you will debug between machines are me
 
 **Scope.** Here: the layered model, Ethernet and ARP, IP addressing and routing, ICMP, DHCP, NAT, firewalls, DNS, ports, TCP in depth, UDP, QUIC as a transport, the network view of sockets, network performance arithmetic, an L4/L7 primer, and wire-level diagnosis. The socket system calls and kernel queues were taught in Chapter 4 (Section 4.6) and are only recalled. HTTP (including HTTP/2 and HTTP/3 framing) is Chapter 7. Cryptography and the TLS handshake are Chapter 8. Load balancer and reverse proxy architecture is Chapter 10. Timeouts, retries and backoff as design tools are Chapter 24; idempotency keys are Chapter 13.
 
-**Classic textbook topics.** Section 6.15 covers topics that networks courses and campus interviews ask about but a backend rarely configures: network devices and collision and broadcast domains, topologies, circuit versus packet switching, cast types, classful addressing and subnetting practice, error detection (parity, checksum, CRC, Hamming), stop-and-wait, Go-Back-N and selective repeat, CSMA/CD and CSMA/CA, and routing algorithms (distance vector, link state, BGP).
+**Placement-round topics.** Section 6.15 covers topics asked mainly in campus placement rounds and exams, which a backend rarely configures: network devices and collision and broadcast domains, topologies, circuit versus packet switching, cast types, classful addressing and subnetting practice, error detection (parity, checksum, CRC, Hamming), stop-and-wait, Go-Back-N and selective repeat, CSMA/CD and CSMA/CA, and routing algorithms (distance vector, link state, BGP).
 
 ---
 
@@ -1786,9 +1786,9 @@ These tools show what the local host sent and received. They do not show what ha
 
 Every client library and pool should report connect time, time to first byte and total time as separate measurements, with connect timeouts and read timeouts configured separately and explicitly. Then the logs already say which row of the failure table you are in.
 
-## 6.15 Classic Textbook Topics: Devices, Switching, Addressing, Error Control, Medium Access, Routing
+## 6.15 Placement-Round Topics: Devices, Switching, Addressing, Error Control, Medium Access, Routing
 
-University computer-networks courses, campus placement interviews and written tests ask about a set of topics that the rest of this chapter skipped or only mentioned, because a backend engineer rarely configures them. This section teaches each one to interview depth and ties it back to the mechanisms you already know.
+> **Placement-round topics.** This section is for campus placement rounds, university exams and written tests, where these topics are asked often. Backend and product-company interviews rarely ask them, and production systems rarely depend on them. **Give your main focus to Sections 6.1–6.14**; read this section before placement rounds and come back to it for revision. Where a topic does connect to real backend work, its "Backend connection" says so.
 
 ### Network devices, collision domains and broadcast domains
 
@@ -2157,7 +2157,7 @@ The **4-tuple** identifies a connection, which is why one server port can carry 
 
 **UDP** offers datagrams with boundaries and nothing else, which suits DNS, media and protocols that bring their own reliability. **QUIC** builds independent encrypted streams on UDP, removing TCP's **head-of-line blocking** between streams, merging the transport and TLS handshakes, and surviving address changes. Performance is governed by **RTT** (bounded by the speed of light), **bandwidth**, the **bandwidth-delay product** that windows must cover, and **loss**, which caps loss-based TCP throughput at roughly MSS / (RTT × √p) and shows up in p99 as retransmission timeouts. **L4** balancers choose per connection and **L7** balancers per request, which is why long-lived HTTP/2 connections pin load behind L4. Finally, every error message (refused, connect timeout, read timeout, reset, unknown host, no route) names a specific event on the wire, which `ping`, `traceroute`, `dig`, `ss` and `tcpdump` can confirm.
 
-Section 6.15 adds the classic textbook topics. Hubs, switches and routers differ in what they forward by and in which collision and broadcast domains they separate. Packet switching beat circuit switching for bursty data, and classful addressing gave way to CIDR. Parity, checksums, CRCs and Hamming codes detect or correct accidental errors. Stop-and-wait, Go-Back-N and selective repeat are the ancestors of TCP's windows, CSMA/CD and CSMA/CA arbitrate shared media with randomised backoff, and distance-vector, link-state and path-vector (BGP) routing compute the paths that IP packets follow.
+Section 6.15 adds the placement-round topics. Hubs, switches and routers differ in what they forward by and in which collision and broadcast domains they separate. Packet switching beat circuit switching for bursty data, and classful addressing gave way to CIDR. Parity, checksums, CRCs and Hamming codes detect or correct accidental errors. Stop-and-wait, Go-Back-N and selective repeat are the ancestors of TCP's windows, CSMA/CD and CSMA/CA arbitrate shared media with randomised backoff, and distance-vector, link-state and path-vector (BGP) routing compute the paths that IP packets follow.
 
 ---
 

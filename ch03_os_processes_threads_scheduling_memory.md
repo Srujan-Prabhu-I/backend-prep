@@ -41,7 +41,7 @@ These mechanisms are the source of many of the strangest backend symptoms: a ser
 
 **Scope.** Here: the CPU and memory side of the operating system, meaning privilege modes, system calls, processes, threads, scheduling and virtual memory. Files, file descriptors, the page cache, `fsync`, I/O models (`epoll`, `io_uring`), inter-process communication, containers, namespaces and cgroups are in Chapter 4. Race conditions, locks, semaphores and deadlock are in Chapter 5; this chapter mentions them only as forward references. Thread pools and execution models inside a server are in Chapter 11.
 
-**Classic textbook topics.** Section 3.20 covers topics that operating-systems courses and campus interviews ask about but a backend rarely meets: system types (batch, multiprogramming, multitasking, multiprocessing, real-time), the boot process, and contiguous memory allocation (first, best and worst fit).
+**Placement-round topics.** Section 3.20 covers topics asked mainly in campus placement rounds and exams, which a backend rarely meets: system types (batch, multiprogramming, multitasking, multiprocessing, real-time), the boot process, and contiguous memory allocation (first, best and worst fit).
 
 ---
 
@@ -1940,9 +1940,9 @@ $ ps -eLo pid,tid,stat,pcpu,comm -p 4121           # per-thread CPU and state
 5. **Core dumps** for crashes from signals such as `SIGSEGV`.
 
 
-## 3.20 Classic Textbook Topics: System Types, Booting, and Contiguous Memory Allocation
+## 3.20 Placement-Round Topics: System Types, Booting, and Contiguous Memory Allocation
 
-This section covers three topics that university operating-systems courses, campus placement interviews and written tests ask about often, even though a modern backend rarely meets them directly. Each is taught to interview depth and connected to the mechanisms earlier in this chapter.
+> **Placement-round topics.** This section is for campus placement rounds, university exams and written tests, where these topics are asked often. Backend and product-company interviews rarely ask them, and production systems rarely depend on them. **Give your main focus to Sections 3.1–3.19**; read this section before placement rounds and come back to it for revision. Where a topic does connect to real backend work, its "Backend connection" says so.
 
 ### System types: batch, multiprogramming, multitasking, multiprocessing, real-time
 
@@ -2128,7 +2128,7 @@ The **scheduler** decides which ready thread runs. FCFS suffers the convoy effec
 
 **Virtual memory** gives each process private addresses that the MMU translates to physical frames through **multi-level page tables**, made fast by the **TLB** and helped by **huge pages**. Pages are allocated on demand; the first touch is a **minor fault**, a page that must come from disk is a **major fault**, and COW and **mmap** are built on the same fault mechanism. When RAM is full, the kernel evicts pages using LRU approximations; FIFO can even get worse with more memory (**Belady's anomaly**). When working sets exceed RAM, the system **thrashes**. Swap makes latency unpredictable, overcommit lets processes reserve more than exists, and when the bet fails the **OOM killer** sends `SIGKILL`, leaving no application log. The OS measures **RSS**, not your heap, and RSS includes stacks, native memory, code and shared pages. Read `top`, `vmstat`, `ps` and `/proc` to tell CPU saturation, storage stalls, memory pressure and "waiting on something else" apart.
 
-Section 3.20 adds the classic textbook topics. Multiprogramming keeps several programs in memory to use the CPU during I/O waits, multitasking adds time slices for responsiveness, and multiprocessing adds CPUs. Booting runs firmware, then a bootloader, then the kernel, then PID 1. Contiguous allocation places each process in one hole (first, best or worst fit) and suffers the external fragmentation that paging removes.
+Section 3.20 adds the placement-round topics. Multiprogramming keeps several programs in memory to use the CPU during I/O waits, multitasking adds time slices for responsiveness, and multiprocessing adds CPUs. Booting runs firmware, then a bootloader, then the kernel, then PID 1. Contiguous allocation places each process in one hole (first, best or worst fit) and suffers the external fragmentation that paging removes.
 
 ## Guarantees vs. Non-Guarantees
 
