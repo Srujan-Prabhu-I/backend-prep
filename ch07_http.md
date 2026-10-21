@@ -1265,7 +1265,7 @@ An **HTTP cookie** (standardized in **RFC 6265**) is a small piece of state (`na
 
 Because HTTP is stateless (Section 7.1), a web server that sends an HTML page to a browser has no built-in protocol way to know whether the next HTTP request arriving 2 seconds later comes from the same logged-in user.
 
-While programmatic API clients (mobile apps, backend services, SPAs) often attach an explicit `Authorization: Bearer <token>` header in application code on every request, traditional browser navigation (clicking an `<a href="/settings">` link, loading `<img src="/avatar">`, or submitting an HTML `<form>`) does **not** let JavaScript attach custom `Authorization` headers to the browser's native page-load request. Cookies solve this at the HTTP protocol level: the server hands the browser a `Set-Cookie` header once (e.g., at login), and the browser can attach `Cookie: ...` to eligible requests, subject to the cookie's own attributes (below) and the browser's privacy settings (Chapter 9).
+While programmatic API clients (mobile apps, backend services, and single-page applications, or SPAs: web front ends whose JavaScript calls APIs directly) often attach an explicit `Authorization: Bearer <token>` header in application code on every request, traditional browser navigation (clicking an `<a href="/settings">` link, loading `<img src="/avatar">`, or submitting an HTML `<form>`) does **not** let JavaScript attach custom `Authorization` headers to the browser's native page-load request. Cookies solve this at the HTTP protocol level: the server hands the browser a `Set-Cookie` header once (e.g., at login), and the browser can attach `Cookie: ...` to eligible requests, subject to the cookie's own attributes (below) and the browser's privacy settings (Chapter 9).
 
 *(Scope boundary: This section covers only the **wire syntax and protocol transport** of `Set-Cookie` and `Cookie`. How browsers isolate cookies under the Same-Origin Policy, why automatic cookie attachment creates **CSRF (Cross-Site Request Forgery)** vulnerabilities, and how server-side sessions vs. JWTs are architected live in Chapters 9 and 19.)*
 
@@ -1312,7 +1312,7 @@ Three wire-level protocol rules you must know:
 Cookies guarantee that a compliant browser returns matching cookies on matching requests, as their attributes allow. They do not guarantee that every client accepts, keeps or sends them (many non-browser clients ignore cookies entirely).
 
 Cookies do **not** guarantee:
-* **Integrity or confidentiality of the cookie value against the client itself:** Even with `HttpOnly` and `Secure`, a user sitting at their own laptop can open Chrome DevTools (`Application → Cookies`) or run `curl -H "Cookie: role=admin"` and edit any cookie value they want. If your server stores `Set-Cookie: userId=42` without a cryptographic **HMAC signature** or **opaque server-side session lookup** (Chapter 19), any user can change `userId=42` to `userId=1` and hijack another account.
+* **Integrity or confidentiality of the cookie value against the client itself:** Even with `HttpOnly` and `Secure`, a user sitting at their own laptop can open Chrome DevTools (`Application → Cookies`) or run `curl -H "Cookie: role=admin"` and edit any cookie value they want. If your server stores `Set-Cookie: userId=42` without a cryptographic **HMAC signature** (a keyed tag that proves the value was not changed, Chapter 8, Section 8.5) or an **opaque server-side session lookup** (Chapter 19), any user can change `userId=42` to `userId=1` and hijack another account.
 
 ### Failure and diagnosis
 
@@ -1338,8 +1338,8 @@ Keep cookies tiny (just a single opaque session ID like `sid=98a1...`, `< 100 by
 
 As we noted in Section 7.3, **the HTTP parser is the first line of defense for your server's memory and sockets.**
 Suppose your server had no header timeout and no body size limit:
-1. **Slowloris DoS attack:** An attacker opens 8,000 TCP connections to your server and sends 1 byte of an incomplete header (`X-a: b`) every 10 seconds, never sending the terminating `\r\n\r\n`. Without a strict **header read timeout** (e.g., `5–10 seconds`), those 8,000 trickle connections hold all 8,000 connection slots hostage with almost zero attacker bandwidth.
-2. **Heap exhaustion DoS:** An attacker sends `Content-Length: 2000000000` (2 GB) on 10 connections; without a body limit (`413 Content Too Large`), a naive parser buffers the stream until the server crashes with `OutOfMemoryError`.
+1. **Slowloris, a denial-of-service (DoS) attack** (an attack that makes a service unavailable by exhausting its resources rather than by breaking in): An attacker opens 8,000 TCP connections to your server and sends 1 byte of an incomplete header (`X-a: b`) every 10 seconds, never sending the terminating `\r\n\r\n`. Without a strict **header read timeout** (e.g., `5–10 seconds`), those 8,000 trickle connections hold all 8,000 connection slots hostage with almost zero attacker bandwidth.
+2. **Heap exhaustion DoS:** An attacker sends `Content-Length: 2000000000` (2 GB) on 10 connections; without a body limit (`413 Content Too Large`), a naive parser buffers the stream until the process runs out of memory and crashes (in Java, with `OutOfMemoryError`).
 
 Malformed messages are the third case. Section 7.3 showed that framing is a security boundary: a server that cannot parse a message cannot know where the next one on the connection begins, so it answers `400 Bad Request` and closes the connection. Messages that parse correctly but exceed a limit get the specific codes listed in Section 7.5 (`414` for the target, `431` for headers, `413` for the body, `408` for a client that sends too slowly).
 
@@ -1390,7 +1390,7 @@ From the client's perspective, **Timelines A, B, and C produce the exact same ex
 * If the client never retries, then in Timelines A and B the customer's order fails.
 
 **The solution (which we will implement end to end in Chapters 13 and 24):**
-1. For **safe/idempotent methods** (`GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS`), retrying on a timeout or `502`/`503`/`504` (with exponential backoff and jitter) is safe by protocol design because executing the operation a second time produces the same server state.
+1. For **safe/idempotent methods** (`GET`, `HEAD`, `PUT`, `DELETE`, `OPTIONS`), retrying on a timeout or `502`/`503`/`504` (with **exponential backoff**, doubling the wait after each failed attempt, and **jitter**, a random spread added to each wait so that many clients do not retry in lockstep; both in Chapter 24) is safe by protocol design because executing the operation a second time produces the same server state.
 2. For **non-idempotent methods** (`POST`, `PATCH`), when the API supports idempotency keys, the client should generate a unique **`Idempotency-Key` value** (a UUID is one option) *before* the first attempt (`Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000`) and send that **exact same key** on every retry of that logical operation. The server stores the key atomically with the payment transaction in its database: if Timeline C happened, the retry sees that `550e8400-...` already committed and simply replays the stored `201 Created` response without charging the card a second time.
 
 ### Guarantees and non-guarantees
