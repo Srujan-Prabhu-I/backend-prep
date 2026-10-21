@@ -968,6 +968,8 @@ Programs alternate between **CPU bursts** (computing) and **I/O bursts** (waitin
 
 ### Concrete: four algorithms on one job set
 
+> **Placement-round focus:** computing Gantt charts and average waiting times by hand is mainly a campus-placement and exam exercise. What carries into backend work is the trade-off each algorithm makes (shortest-first starves long jobs; short time slices buy response time with switching cost), so make sure you can explain those first.
+
 Four jobs, with arrival times and the length of their next CPU burst in milliseconds:
 
 | Job | Arrival | Burst |
@@ -1483,6 +1485,8 @@ A database with a 20 GB buffer cache, or a runtime with a 16 GB heap, touches fa
 
 ### Segmentation: the interview contrast
 
+> **Placement-round focus:** segmentation is asked mostly in placement rounds and exams, as a contrast with paging. Modern 64-bit systems rely on paging; know the contrast, not the details.
+
 **Segmentation** is an older scheme that divides memory into variable-sized **segments** (code, data, stack), each described by a base address and a length. An address is (segment, offset), translated as base + offset after checking offset < length.
 
 | | Paging | Segmentation |
@@ -1604,6 +1608,8 @@ Every bad choice turns into a future major fault, costing a disk access. The goa
 - **Clock (second chance):** a cheap LRU approximation using the hardware's *accessed* bit (Section 3.14). Frames sit in a circle with a "hand". To find a victim, the hand inspects the frame it points to: if its accessed bit is 1, clear it to 0 (a second chance) and advance; if it is 0, evict that page. A page referenced at least once per sweep survives.
 
 ### Concrete: FIFO, LRU and OPT on one reference string
+
+> **Placement-round focus:** counting page faults for FIFO and OPT, and Belady's anomaly below, are mainly placement and exam exercises. LRU and Clock are real backend knowledge: they are how database buffer pools (Chapter 15) and caches (Chapter 21) choose what to evict, and "implement an LRU cache" is a very common coding question in product-company interviews.
 
 Three frames, initially empty. Reference string: **2 3 2 1 5 2 4 5 3 2 5 2**. `F` marks a fault; frames are listed in no particular order except for FIFO, where the leftmost is the oldest.
 

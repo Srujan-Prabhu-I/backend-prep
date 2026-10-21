@@ -207,6 +207,8 @@ Design `entry_section` and `exit_section` so that three requirements hold:
 
 A solution must also make no assumption about the relative speed of threads or the number of CPUs.
 
+> **Placement-round focus:** tracing Peterson's algorithm is mainly a placement and exam exercise; no production code uses it. What carries into backend work is the point made right after it: on real hardware it breaks without memory barriers, which is why real locks are built from atomic instructions (Sections 5.3 and 5.4).
+
 **A software-only solution: Peterson's algorithm (two threads).**
 
 ```pseudo
@@ -1389,6 +1391,8 @@ transfer(from, to, amount):
 Both A (1 → 2) and B (2 → 1) now lock account 1 first. Whichever gets it first proceeds; the other waits *holding nothing*. The same technique prevents database deadlocks: update rows in a consistent order (for example, by primary key) in every transaction (Chapter 17).
 
 #### Avoidance: the Banker's algorithm
+
+> **Placement-round focus:** running the Banker's algorithm by hand (finding a safe sequence from allocation and need matrices) is mainly a placement and exam exercise; servers almost never know their maximum needs in advance. What carries into backend work is the difference between prevention (lock ordering), avoidance and detection, and the fact that databases detect deadlocks and abort a victim (Chapter 17).
 
 **Deadlock avoidance** lets threads request resources freely, but grants a request only if the resulting state is **safe**: a state in which there is at least one order (a **safe sequence**) in which every thread can obtain its maximum remaining needs and finish, each releasing its resources for the next. A safe state cannot lead to deadlock if threads behave as declared. An **unsafe** state is not necessarily deadlocked; it is one from which the system can no longer *guarantee* that a deadlock will be avoided.
 
