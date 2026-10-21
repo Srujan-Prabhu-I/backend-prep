@@ -830,6 +830,10 @@ Choose the API style for how the code must compose and stream, and the execution
 
 ## 11.10 Diagnosis: Reading Thread Dumps and Telling Bottlenecks Apart
 
+### Definition
+
+A **thread dump** is a snapshot of every thread in a process at one instant: its name, its state (running, blocked on a lock, waiting, parked) and its stack of method calls. A **bottleneck signature** is the combination of a thread dump, CPU use and pool metrics that identifies which resource is limiting a server.
+
 ### Why
 
 When a server is slow or stuck, the most direct evidence is **what every thread is doing right now**. Chapter 5 (Section 5.14) explained how to take a thread dump and what the thread states mean. This section applies it to the server failures of this chapter.

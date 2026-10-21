@@ -263,6 +263,41 @@ Two identical backends, A and B, each with **4 workers**. Requests arrive every 
 
 Same hardware, same traffic: one algorithm produces an overloaded backend next to an idle one, the other a healthy system. The lesson is that **round robin balances request counts, not load**. Real traffic rarely alternates so neatly, but mixtures of cheap and expensive endpoints are normal.
 
+### Concrete: why plain hashing remaps almost every key, and how a ring prevents it
+
+Hashing is used when the same key should keep reaching the same backend, for example because each backend keeps a large in-memory cache of the tenants it serves. The simplest rule is `backend = hash(key) mod N`. It works until N changes.
+
+Take eight keys whose hashes are 17, 42, 63, 88, 91, 105, 230 and 311, spread over four backends (0 to 3). Backend 3 crashes, so N becomes 3:
+
+```text
+ hash        17   42   63   88   91  105  230  311
+ mod 4        1    2    3    0    3    1    2    3     before: backend 3 holds 63, 91, 311
+ mod 3        2    0    0    1    1    0    2    2     after
+ moved?      yes  yes  yes  yes  yes  yes   no  yes    7 of 8 keys moved
+```
+
+Only three keys (63, 91 and 311) had to move, because only they lived on the failed backend. Plain hashing moved seven. In general, going from N to N − 1 backends moves about (N − 1)/N of all keys: 90% when N is 10. Every backend's cache becomes cold at the same moment, and the database behind them receives the misses all at once (a cache stampede, Chapter 21).
+
+**Consistent hashing** places backends and keys on the same circle of hash values (a **hash ring**). A key belongs to the first backend found by moving clockwise from the key's position. Using a ring of 0 to 99 for readability:
+
+```text
+                        0
+              k5(97) ●     ● A(20)
+       D(95) ●                    ● k1(10) → A
+                                                    keys:  k1 at 10  → A (next clockwise: 20)
+   k4(80) ●                          ● k2(30) → B          k2 at 30  → B (50)
+                                                           k3 at 60  → C (75)
+       C(75) ●                    ● B(50)                  k4 at 80  → D (95)
+                 ● k3(60)                                  k5 at 97  → A (wraps past 0 to 20)
+
+ remove C:  only k3 moves (60 → next clockwise is now D at 95). k1, k2, k4, k5 stay where they were.
+```
+
+Removing a backend moves only the keys on the arc that backend owned, about 1/N of them; adding a backend takes over part of one arc. Two refinements make it work in practice:
+
+1. **Virtual nodes.** With one point per backend, the arcs have random lengths. Above, A owns 25 of the 100 positions, B 30, C 25 and D 20. Worse, when C fails, all of its keys go to a single neighbour, D. Real implementations place each backend at many points around the ring (often a hundred or more). Each backend's total share then evens out, and a failed backend's keys spread across all the remaining ones.
+2. **Hot keys.** Consistent hashing spreads **keys**, not **load**. One very popular key (a celebrity account, a flash-sale product) still lands on one backend. Some balancers can cap a backend's share and spill excess requests for a key to the next backend on the ring, trading some cache affinity for safety. Chapter 23 returns to hot keys when partitioning data.
+
 ### Mechanism 2: health checks
 
 - **Active checks.** The balancer requests a health endpoint (`GET /healthz`) on each backend every few seconds. After a configured number of consecutive failures (say 3) it marks the backend unhealthy and stops sending traffic; after a number of successes it restores it. Thresholds trade speed of detection against flapping.
@@ -408,6 +443,50 @@ Stage by stage:
 4. **Parsing and limits.** The parser accumulates bytes until it has a complete header section (and a body, per the framing rules), rejecting anything malformed or over the limits. A request that is rejected here never reaches your code or your application logs; only the server's access log, if any, records it.
 5. **Handing to a worker.** In a thread-pool server, the parsed request is queued for a worker thread; if all workers are busy, it waits in that queue (the second buffer). In an event-loop server, the handler runs on the loop thread itself.
 6. **Keep-alive.** After the response, the connection returns to the poller for the next request, until the client or the server's idle timeout closes it (Chapter 7, Section 7.9). HTTP/2 connections carry many requests at once; the server tracks streams per connection and limits how many can be open.
+
+### Concrete: a request whose headers arrive in two pieces
+
+TCP delivers a byte stream, not messages (Chapter 6, Section 6.9). A request's header section can arrive split across several reads, especially from a slow mobile client. A non-blocking server must not hold a worker while it waits for the rest. Instead, it keeps a small record per connection and lets the parser resume wherever it stopped:
+
+```pseudo
+record Connection:
+    socket
+    buffer              // bytes received but not yet consumed
+    state               // READING_REQUEST_LINE | READING_HEADERS | READING_BODY | DISPATCHED
+    request             // the partly built request
+    headerDeadline      // when the header section must be complete
+
+function onReadable(conn):                         // called by the poller
+    loop:
+        n = read(conn.socket, conn.buffer)          // non-blocking
+        if n == EAGAIN: break                       // nothing more for now
+        if n == 0: close(conn); return              // client closed (EOF)
+    parser.advance(conn)                            // consume as much of the buffer as possible
+    if conn.buffer.size > MAX_HEADER_BYTES:  respond(conn, 431); close(conn); return
+    if conn.state == DISPATCHED:  workerQueue.put(conn.request)
+    // otherwise: return to the poller; no thread waits for the rest
+
+function onTimer(conn):                             // the poller also tracks deadlines
+    if conn.state != DISPATCHED and now() > conn.headerDeadline:
+        respond(conn, 408); close(conn)
+```
+
+```text
+ t = 0 ms     connection accepted, registered with the poller            threads used: 0
+ t = 20 ms    segment 1 arrives (71 bytes):
+                GET /api/orders?page=2 HTTP/1.1\r\nHost: api.example.com\r\nAccept: applica
+              parser: request line complete → state READING_HEADERS
+                      "Host" header complete; "Accept: applica" incomplete, kept in buffer
+              read() returns EAGAIN → back to the poller                  threads used: 0
+ t = 180 ms   segment 2 arrives (47 bytes):
+                tion/json\r\nCookie: sid=8f2a91c0d3e4f5a6b7c8\r\n\r\n
+              parser resumes at "Accept: applica", completes it, reads Cookie,
+              finds \r\n\r\n → header section complete → state DISPATCHED
+              request placed on the worker queue                          threads used: 1, from here on
+ t = 180 ms+  the handler runs; the 160 ms gap cost a buffer, not a thread
+```
+
+A thread-per-connection server would have spent the same 160 ms with a thread blocked inside `read`. With fast clients that does not matter. With thousands of slow or idle clients it is the whole difference. A server can therefore hold, say, 10,000 open connections with a 200-thread worker pool: the connections that are idle between keep-alive requests, or still trickling in their headers, cost a file descriptor and a small buffer each, and no worker. The **header deadline** is the defence against clients that send headers deliberately slowly to hold connections open (slow-client attacks, Chapter 7, Section 7.15). Without it, a few thousand such connections exhaust the connection limit while the CPU stays idle.
 
 ### Concrete: the queues a request can wait in
 
@@ -831,6 +910,10 @@ Write the timeout chain down for each request path, from the client to the datab
 ---
 
 ## 10.11 Diagnosis Toolkit: Reading the Proxy's Evidence
+
+### Definition
+
+A proxy's **access log** records one line per request it handled: timing, status, the upstream it chose and that upstream's status. Its **error log** records the proxy's own problems with a request, such as failing to connect to an upstream, or the upstream closing or timing out. Together they are the evidence for any request that failed before or outside your application.
 
 ### What to look at
 

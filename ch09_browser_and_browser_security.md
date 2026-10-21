@@ -366,7 +366,7 @@ Where the browser keeps state, and when it sends it, decides two things the back
 For every request, the browser goes through its cookie jar and attaches each cookie for which **all** of these hold:
 
 1. **Domain matches.** A cookie set without `Domain` is **host-only**: it is sent only to the exact host that set it. With `Domain=example.com`, it is sent to `example.com` and every subdomain. (A server cannot set a cookie for a public suffix or for an unrelated domain.)
-2. **Path matches**: the request path starts with the cookie's `Path`.
+2. **Path matches**: the request path equals the cookie's `Path`, or starts with it at a `/` boundary (`Path=/app` matches `/app` and `/app/orders`, but not `/apple`; Chapter 7, Section 7.14).
 3. **`Secure`**: if set, only on HTTPS requests.
 4. **Not expired** (`Max-Age` or `Expires`; a cookie with neither lives until the browser session ends).
 5. **`SameSite` allows this request** (below).
@@ -905,6 +905,10 @@ Pick the rendering strategy per page, by its data: SSG or ISR for public, rarely
 
 ## 9.11 Diagnosis: The Browser's Own Tools
 
+### Definition
+
+**Browser developer tools** (DevTools) are the inspection panels built into the browser (Network, Console, Application, Performance) that record what the browser actually requested, received, stored, blocked and rendered for a page.
+
 ### Why
 
 Many incidents that reach the backend start as a front-end report: "the API is broken", "it says CORS", "the page is slow". The browser records the evidence in its developer tools; reading it settles whether the problem is the network, the server, the browser's security rules or the page's own code.
@@ -964,6 +968,10 @@ The page is HTTPS, a script is referenced by `http://` URL, and the browser refu
 ### Concrete 4: the Application and Console panels
 
 The **Application** panel lists cookies per origin with every attribute, and in Chromium-based browsers marks cookies that were rejected or not sent with the reason (for example a `SameSite` restriction), which is the fastest answer to "why is my cookie missing". It also shows `localStorage`, `sessionStorage` and IndexedDB contents. The **Console** shows CSP violations, CORS errors and mixed-content blocks, each naming the resource and the rule.
+
+### Guarantees and non-guarantees
+
+DevTools show what this browser sent, received, stored and blocked, from the browser's side of the connection. They do not show what happened behind the first server or proxy the request reached, so a slow "Waiting for server response" says that something behind it was slow, not what. They also show more than the page's code can see: when a CORS check fails, the page's JavaScript receives only a generic network error, while the Console explains which rule failed.
 
 ### Backend connection
 

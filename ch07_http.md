@@ -1076,7 +1076,7 @@ Every standards-compliant HTTP cache (browser or CDN) executes this exact state 
           │ Origin returns 200 OK     │                │ REVALIDATED HIT.  │  │ CACHE REFRESH.    │
           │ (Store in cache if allowed│                │ Update headers &  │  │ Replace cached    │
           │  by Cache-Control; return │                │ reset max-age;    │  │ entry with new    │
-          │  200 OK + body to client) │                │ serve stored body!│  │ 200 OK + new body!│
+          │  200 OK + body to client) │                │ serve stored body.│  │ 200 OK + new body.│
           └───────────────────────────┘                └───────────────────┘  └───────────────────┘
 ```
 
@@ -1103,9 +1103,9 @@ The response directives:
 | **`no-store`** | Private & Shared Caches | **Do not store this exchange in an HTTP cache.** This does not erase earlier copies or govern all application storage. | Highly sensitive data (bank account numbers, medical records, one-time recovery codes). |
 | **`no-cache`** | Private & Shared Caches | **May store the response in cache**, but **MUST revalidate** with the origin (`If-None-Match` / `ETag`) before serving it on every single request. | Dynamic HTML pages (`index.html`), mutable API resources where you want instant updates (`200`) when data changes, but cheap header-only `304` responses when unchanged. |
 | **`private`** | **Browser (Private) Cache ONLY** | Only the single end-user's private cache (browser) may store this response; **shared caches (CDNs/proxies) MUST NOT store it.** | Personalized responses (`GET /v1/me/profile`, `GET /v1/dashboard`) that belong to one logged-in user. |
-| **`public`** | Private & Shared Caches | Explicitly permits shared caches (CDNs) to store the response (even if the request carried an `Authorization` header, which otherwise blocks shared caching by default.). | Public catalog pages, public API docs, static assets (`logo.png`, `app.abc12.js`). |
+| **`public`** | Private & Shared Caches | Explicitly permits shared caches (CDNs) to store the response (even if the request carried an `Authorization` header, which otherwise blocks shared caching by default). | Public catalog pages, public API docs, static assets (`logo.png`, `app.abc12.js`). |
 | **`max-age=N`** | Private & Shared Caches | The response is **fresh for N seconds** from when it was generated at the origin. | `max-age=60` on a public API response; `max-age=31536000` (1 year) on content-hashed static files. |
-| **`s-maxage=N`** | **Shared Caches (CDNs) ONLY** | Overrides `max-age` **strictly for shared caches (CDNs)**. Ignored by browser private caches. | `Cache-Control: public, max-age=0, s-maxage=300`: tells the **CDN** to cache for 5 minutes (absorbing traffic spikes, while allowing your backend to purge the CDN instantly on update.), while telling **browsers** (`max-age=0`) to always check with the CDN so users never get stuck with stale data in their local browser. |
+| **`s-maxage=N`** | **Shared Caches (CDNs) ONLY** | Overrides `max-age` **strictly for shared caches (CDNs)**. Ignored by browser private caches. | `Cache-Control: public, max-age=0, s-maxage=300`: tells the **CDN** to cache for 5 minutes (absorbing traffic spikes, while allowing your backend to purge the CDN on update), while telling **browsers** (`max-age=0`) to always check with the CDN so users never get stuck with stale data in their local browser. |
 | **`must-revalidate`** | Private & Shared Caches | Once the response becomes stale (`Age >= max-age`), the cache **MUST NOT** serve the stale copy if the origin is unreachable; it must revalidate or return `504`. | Financial quotes or inventory counts where serving stale data after expiry is worse than an error. |
 | **`immutable`** *(RFC 8246)* | Private Caches (Browsers) | Tells the browser: *"The bytes at this exact URL will **never** change during its `max-age` lifetime; do not even send a conditional `If-None-Match` revalidation if the user clicks Reload."* | Content-hashed bundles (`main.9f8a12.js`, `styles.44c01.css`) where any code change produces a brand-new filename URL. |
 | **`stale-while-revalidate=M`** *(RFC 5861)* | Private & Shared Caches | If a request arrives within M seconds after `max-age` expired, serve the slightly stale cached copy **immediately (`0 ms` wait)** and revalidate with the origin **asynchronously in the background**. | High-traffic news feeds, product listings, and API gateways where hiding origin tail latency is critical. |
@@ -1144,7 +1144,7 @@ If the CDN keyed *only* by URI, User 1 (`Accept-Language: hi`) would populate th
 Adding **`Vary: Accept-Encoding, Accept-Language`** to your origin response tells the CDN: ***"Include the values of `Accept-Encoding` and `Accept-Language` in the cache key alongside the URI."***
 
 **The `Vary` Cache-Explosion Trap:** What if a developer carelessly writes **`Vary: User-Agent`** or **`Vary: Cookie`** on a public CDN response?
-Because there are **tens of thousands of distinct `User-Agent` strings** (every browser build, OS patch, and phone model differs.) and every user has a unique `Cookie`, adding `Vary: User-Agent` or `Vary: Cookie` partitions the CDN cache into millions of tiny buckets, collapsing your CDN cache hit ratio toward **0%**. (If a response depends on `Cookie` or `Authorization`, mark it `Cache-Control: private` so it is cached only in the user's own browser, or normalize the request into a low-cardinality header like `X-Device-Class: mobile|desktop` at the CDN edge.)
+Because there are **tens of thousands of distinct `User-Agent` strings** (every browser build, OS patch, and phone model differs) and every user has a unique `Cookie`, adding `Vary: User-Agent` or `Vary: Cookie` partitions the CDN cache into millions of tiny buckets, collapsing your CDN cache hit ratio toward **0%**. (If a response depends on `Cookie` or `Authorization`, mark it `Cache-Control: private` so it is cached only in the user's own browser, or normalize the request into a low-cardinality header like `X-Device-Class: mobile|desktop` at the CDN edge.)
 
 ### Guarantees and non-guarantees
 
@@ -1156,7 +1156,7 @@ HTTP caching does **not** guarantee that a buggy application framework won't acc
 
 * **The Cross-User Data Leak via CDN (Caching a `Set-Cookie` / Personalized Response):**
   * *Symptom:* User A logs in, visits `/account/summary`, and sees **User B's name, email, and order history**.
-  * *Mechanism:* The `/account/summary` endpoint authenticated users via a session `Cookie`, and a well-meaning developer configured the CDN to "cache all `GET 200 OK` responses for 60 seconds" (or put `Cache-Control: public, max-age=60` on a global controller filter.). Unlike `Authorization` (which RFC 9111 treats as private by default), **RFC 9111 does NOT forbid a shared cache from caching a response to a request that contained a `Cookie` header if `max-age` / `public` is present.** The CDN cached User B's `/account/summary` HTML (and sometimes even User B's `Set-Cookie` header.) and served it to User A.
+  * *Mechanism:* The `/account/summary` endpoint authenticated users via a session `Cookie`, and a well-meaning developer configured the CDN to "cache all `GET 200 OK` responses for 60 seconds" (or put `Cache-Control: public, max-age=60` on a global controller filter). Unlike `Authorization` (which RFC 9111 treats as private by default), **RFC 9111 does NOT forbid a shared cache from caching a response to a request that contained a `Cookie` header if `max-age` / `public` is present.** The CDN cached User B's `/account/summary` HTML (and sometimes even User B's `Set-Cookie` header) and served it to User A.
   * *Fix:* Every authenticated or personalized endpoint MUST return **`Cache-Control: private, no-cache`** (or **`Cache-Control: no-store`**), and CDNs must be configured to bypass cache when session cookies are present or strip `Set-Cookie` before caching public pages.
 
 ### Backend connection
@@ -1229,8 +1229,8 @@ Compare the four conditional headers side by side so you never mix them up in an
 
 | Request Header | Validator Used | Typical Method | When Condition Succeeds vs. When It Fails |
 |---|---|---|---|
-| **`If-None-Match: "v1"`** | **`ETag`** | `GET`, `HEAD` *(Cache validation)* | If current ETag ≠ `"v1"` → **`200 OK`** (send new body). If current ETag = `"v1"` → **`304 Not Modified`** (no body.). |
-| **`If-None-Match: *`** | **`ETag`** | `PUT` *(Create-only)* | *"Execute this `PUT` ONLY if **no representation currently exists** at this URI."* If the resource already exists → **`412 Precondition Failed`** (prevents overwriting an existing file/object.). |
+| **`If-None-Match: "v1"`** | **`ETag`** | `GET`, `HEAD` *(Cache validation)* | If current ETag ≠ `"v1"` → **`200 OK`** (send new body). If current ETag = `"v1"` → **`304 Not Modified`** (no body). |
+| **`If-None-Match: *`** | **`ETag`** | `PUT` *(Create-only)* | *"Execute this `PUT` ONLY if **no representation currently exists** at this URI."* If the resource already exists → **`412 Precondition Failed`** (prevents overwriting an existing file or object). |
 | **`If-Match: "v1"`** | **`ETag`** | `PUT`, `PATCH`, `DELETE` *(Optimistic locking)* | If current ETag = `"v1"` → **Execute write (`200`/`204`)**. If current ETag ≠ `"v1"` → **`412 Precondition Failed`**. |
 | **`If-Modified-Since` / `If-Unmodified-Since`** | `Last-Modified` date | `GET` / `PUT` | Date-based equivalents of `If-None-Match` (`304`) and `If-Match` (`412`). Inferior to `ETag` because of 1-second timestamp granularity. |
 
@@ -1284,7 +1284,7 @@ Look closely at the asymmetry between the **response header (`Set-Cookie`)** and
   {"loggedIn":true}
 
 
-  2. CLIENT TO SERVER (Subsequent Request Header: Sends ONLY name=value pairs.)
+  2. CLIENT TO SERVER (Subsequent Request Header: sends only name=value pairs)
   ──────────────────────────────────────────────────────────────────────────────
   GET /v1/orders HTTP/1.1\r\n
   Host: api.example.com\r\n
@@ -1379,10 +1379,10 @@ Look at the **three physically indistinguishable timelines** on the wire:
   TIMELINE B (Failed DURING processing: Card NOT charged, DB rolled back)
   Client ── POST /v1/payments ──► Server starts DB tx ──✕ (Server crashes before commit)
 
-  TIMELINE C (SUCCEEDED on server, failed AFTER commit: Card WAS CHARGED $100.)
+  TIMELINE C (SUCCEEDED on server, failed AFTER commit: Card WAS CHARGED $100)
   Client ── POST /v1/payments ──► Server charges $100 & commits DB tx.
-         ◄───────✕─────────────── Server sends "HTTP/1.1 201 Created" (Takes 5.2s, or packet dropped.)
-  (Client timed out at 5.0s.)
+         ◄───────✕─────────────── Server sends "HTTP/1.1 201 Created" (takes 5.2 s, or packet dropped)
+  (client timed out at 5.0 s)
 ```
 
 From the client's perspective, **Timelines A, B, and C produce the exact same exception (`Read timed out` / `504`)**.
@@ -1409,9 +1409,7 @@ Timeouts **never** guarantee that the remote server aborted the work you asked i
 Every outbound HTTP client in your codebase must configure **three explicit numbers**:
 1. **Connect timeout** (e.g., `250–1,000 ms` inside a data centre; `2–5 s` external).
 2. **Read / response timeout** (sized to the upstream's p99.9 latency, e.g., `2–10 s`).
-3. **Pool idle timeout** (strictly shorter than the upstream server's `keepAliveTimeout` and any NAT/LB idle timeout.).
-
----
+3. **Pool idle timeout** (strictly shorter than the upstream server's `keepAliveTimeout` and any NAT or load-balancer idle timeout).
 
 ---
 

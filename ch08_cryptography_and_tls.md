@@ -323,8 +323,10 @@ Hashes give a short, unforgeable-in-practice fingerprint of data. If you know th
 ### Mechanism: what the properties mean in practice
 
 ```text
- SHA-256("order:42:amount:100") = 4f0c...e1     (32 bytes)
- SHA-256("order:42:amount:101") = b97a...03     (completely different)
+ SHA-256("order:42:amount:100")
+   = da772a97f56f562178f859ed86e2d3ca730cceab1494d0ce88cdebab184902e7   (32 bytes = 64 hex digits)
+ SHA-256("order:42:amount:101")                                           (one character changed)
+   = ab5de235dc4e51a72881be7b2d5d096233b806d7082a7234ab47e4ce057d6c2e   (completely different)
 ```
 
 - For a good n-bit hash, finding a preimage takes about 2^n attempts (2^256 for SHA-256, far beyond any computation).
@@ -403,6 +405,17 @@ A provider sends events to your endpoint, and both sides hold a shared webhook s
 ### Mechanism 3: constant-time comparison
 
 A normal string comparison stops at the first differing byte, so comparing a wrong tag that matches the expected tag in its first 10 bytes takes slightly longer than comparing one that differs in the first byte. Over many requests, an attacker who can measure those small timing differences can discover a valid tag one byte at a time: a **timing side channel**. MAC verification must use a comparison whose time does not depend on where the inputs differ.
+
+The idea is to look at every byte, every time, and combine the differences instead of stopping at the first one:
+
+```pseudo
+function constantTimeEquals(a, b):
+    if length(a) != length(b): return false      // tag lengths are public, so this leaks nothing
+    diff = 0
+    for i in 0 .. length(a) - 1:
+        diff = diff OR (a[i] XOR b[i])           // XOR is 0 only for equal bytes; no early exit
+    return diff == 0
+```
 
 > **Java lens:** `Mac.getInstance("HmacSHA256")` with a `SecretKeySpec` computes HMACs; compare tags with `MessageDigest.isEqual(a, b)`, which runs in constant time, never with `Arrays.equals` or by comparing hex strings with `equals`.
 >
@@ -991,6 +1004,10 @@ When a design says "encrypted in transit", ask: between which two endpoints, who
 ---
 
 ## 8.13 Diagnosing TLS: `openssl s_client` and the Classic Failures
+
+### Definition
+
+**`openssl s_client`** is OpenSSL's command-line TLS client. It connects to a server, runs the handshake with the options you choose, and prints what the server sent: the certificate chain, the negotiated protocol version and cipher suite, and the result of certificate verification.
 
 ### Why a systematic approach
 
