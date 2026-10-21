@@ -41,6 +41,8 @@ These mechanisms are the source of many of the strangest backend symptoms: a ser
 
 **Scope.** Here: the CPU and memory side of the operating system, meaning privilege modes, system calls, processes, threads, scheduling and virtual memory. Files, file descriptors, the page cache, `fsync`, I/O models (`epoll`, `io_uring`), inter-process communication, containers, namespaces and cgroups are in Chapter 4. Race conditions, locks, semaphores and deadlock are in Chapter 5; this chapter mentions them only as forward references. Thread pools and execution models inside a server are in Chapter 11.
 
+**Classic textbook topics.** Section 3.20 covers topics that operating-systems courses and campus interviews ask about but a backend rarely meets: system types (batch, multiprogramming, multitasking, multiprocessing, real-time), the boot process, and contiguous memory allocation (first, best and worst fit).
+
 ---
 
 ## 3.1 What an Operating System Is
@@ -1938,6 +1940,180 @@ $ ps -eLo pid,tid,stat,pcpu,comm -p 4121           # per-thread CPU and state
 5. **Core dumps** for crashes from signals such as `SIGSEGV`.
 
 
+## 3.20 Classic Textbook Topics: System Types, Booting, and Contiguous Memory Allocation
+
+This section covers three topics that university operating-systems courses, campus placement interviews and written tests ask about often, even though a modern backend rarely meets them directly. Each is taught to interview depth and connected to the mechanisms earlier in this chapter.
+
+### System types: batch, multiprogramming, multitasking, multiprocessing, real-time
+
+#### Definitions
+
+- A **batch system** runs jobs one after another with no user interaction: a job is submitted, runs to completion, and its output is collected later.
+- **Multiprogramming** keeps **several programs in memory at once**, so that when the running program waits for I/O, the CPU switches to another one instead of sitting idle. Its goal is **CPU utilisation**. The number of programs in memory is the **degree of multiprogramming** (the quantity on the horizontal axis of the thrashing graph in Section 3.16).
+- **Multitasking** (time-sharing) is multiprogramming plus **preemption by time slices** (Section 3.10): the CPU switches between tasks often enough that each interactive user or task appears to have the machine to itself. Its goal is **response time**.
+- **Multiprocessing** means the system has **more than one CPU or core** (Chapter 2, Section 2.1), so several tasks really run at the same instant. In **symmetric multiprocessing** (SMP) every core runs the same operating system and can run any task; in **asymmetric multiprocessing** one processor controls the others or cores have fixed roles.
+- **Multithreading** means one process contains several threads that share its memory (Section 3.7).
+- A **real-time system** must meet deadlines. In a **hard** real-time system a missed deadline is a failure (an airbag controller); in a **soft** real-time system it degrades quality (a dropped video frame).
+
+#### Why the distinctions exist
+
+They describe the historical steps by which operating systems learned to keep an expensive CPU busy and then to keep users happy: batch (one job at a time, CPU idle during I/O), multiprogramming (overlap one job's I/O with another's computation), time-sharing (add preemption for interactivity), multiprocessing (more hardware). The same ideas are the concurrency-versus-parallelism distinction of Chapter 5 (Section 5.1) seen from the operating system.
+
+#### Mechanism and concrete comparison
+
+| | Several programs in memory | Preemptive time slices | Several CPUs | Main goal |
+|---|---|---|---|---|
+| Batch | no (one at a time) | no | not required | throughput of jobs |
+| Multiprogramming | **yes** | not required (switch on I/O wait) | not required | CPU utilisation |
+| Multitasking / time-sharing | yes | **yes** | not required | response time |
+| Multiprocessing | yes | usually | **yes** | parallel throughput |
+| Multithreading | (within one process) several threads | usually | not required | concurrency inside a program |
+
+```text
+ one CPU, two programs, A computes then waits for disk, B computes
+
+ batch:            A A A [A waits: CPU idle] A A | B B B [B waits: idle] B
+ multiprogramming: A A A  B B B (B runs while A waits)  A A  ...
+ multitasking:     A B A B A B ... switched by the timer every few ms, waiting or not
+```
+
+#### Guarantees, limits and interview traps
+
+Multiprogramming does not make any single program faster; it improves total utilisation. Multitasking does not need several cores (Chapter 5, Section 5.1: concurrency without parallelism). Multiprocessing adds parallelism but also the visibility and ordering problems of Chapter 5 (Section 5.3). A common wrong answer treats "multitasking" and "multiprocessing" as synonyms: one is about time-slicing a CPU, the other about having several.
+
+#### Backend connection
+
+Every server you run is multiprogrammed, multitasking and multiprocessing at once: many processes in memory, preempted by the scheduler, spread across cores. Too high a degree of multiprogramming relative to memory produces thrashing (Section 3.16), and in containers the equivalent is too many busy processes for a memory limit (Chapter 4, Section 4.10).
+
+### The boot process
+
+#### Definition
+
+**Booting** is the sequence that takes a machine from power-on to a running operating system with its first user-space process.
+
+#### Mechanism
+
+```text
+ power on
+   │
+   ▼
+ 1. FIRMWARE (BIOS on older PCs, UEFI on current ones), stored on the motherboard
+    runs a power-on self-test (POST), initialises basic hardware,
+    and finds a boot device according to its configured order
+   │
+   ▼
+ 2. BOOTLOADER (for example GRUB on Linux), loaded by the firmware from the boot disk
+    lets you choose a kernel, then loads the kernel image and an initial RAM
+    filesystem (initramfs) into memory and jumps to the kernel
+   │
+   ▼
+ 3. KERNEL initialises the CPU, memory management (Section 3.13), interrupt handling
+    (Section 3.2) and drivers; uses the initramfs to find and mount the real root
+    filesystem (Chapter 4, Section 4.2)
+   │
+   ▼
+ 4. PID 1 (init; on most Linux distributions, systemd), the first user-space process
+    (Section 3.3), starts services in dependency order: networking, logging,
+    your application's service units
+   │
+   ▼
+ 5. services running; login prompts or the application ready to accept connections
+```
+
+With **UEFI Secure Boot**, the firmware verifies a digital signature (Chapter 8, Section 8.6) on the bootloader, and the bootloader on the kernel, so that a tampered early-boot component is refused.
+
+#### Interview traps and backend connection
+
+Asked "what happens when you switch on a computer", a strong answer names the five stages and what each one hands to the next. For backends, two links matter. A **virtual machine** boots through the same stages, on virtual firmware, which is why it takes seconds to tens of seconds to start (Chapter 4, Section 4.10). A **container** does not boot at all: it is a process started on an already running kernel, and its entry point becomes PID 1 inside its namespace, with the responsibilities described in Section 3.5 and Chapter 4 (Section 4.11). That difference is why containers start in milliseconds.
+
+### Contiguous memory allocation
+
+#### Definition
+
+**Contiguous allocation** gives each process a single continuous range of physical memory. The operating system tracks which ranges are in use and which are free (the free ranges are called **holes**), and places each new process in a hole large enough for it. Two hardware registers protect it: a **base** (relocation) register holding the start address, added to every address the process generates, and a **limit** register holding its size, against which every address is checked.
+
+#### Why it exists, and why paging replaced it
+
+It is the simplest way to share memory among processes, and it was how early multiprogramming systems worked. Its weakness, **external fragmentation** (Section 3.14: free memory exists but is split into pieces too small to use), is exactly what paging was invented to remove: with fixed-size pages, any free frame can hold any page, so no contiguous range is needed (Section 3.14). The ideas survive in places that still allocate contiguous ranges: memory allocators inside processes (Chapter 2, Section 2.6), the kernel's allocation of physically contiguous buffers, and storage allocation on disk (Chapter 4, Section 4.13).
+
+#### Mechanism 1: fixed versus variable partitions
+
+- **Fixed partitions**: memory is divided in advance into partitions of set sizes; each holds one process. A 3 MB process in a 4 MB partition wastes 1 MB inside the partition: **internal fragmentation**.
+- **Variable partitions**: each process gets exactly the size it needs, carved from a hole. No internal fragmentation, but as processes come and go the holes become scattered: **external fragmentation**.
+
+#### Mechanism 2: placement strategies, with a worked example
+
+When a process needs n bytes and several holes are large enough, which one should it get?
+
+- **First fit**: scan from the start; take the first hole that is big enough.
+- **Next fit**: like first fit, but continue scanning from where the previous search stopped.
+- **Best fit**: take the **smallest** hole that is big enough (leaves the smallest leftover).
+- **Worst fit**: take the **largest** hole (leaves the largest leftover, in the hope that it remains usable).
+
+Holes, in memory order: **100 KB, 500 KB, 200 KB, 300 KB, 600 KB**. Processes arrive in order: **212 KB, 417 KB, 112 KB, 426 KB**.
+
+```text
+ FIRST FIT
+ 212 → 500 hole (first that fits)  → holes: 100, 288, 200, 300, 600
+ 417 → 600 hole                    → holes: 100, 288, 200, 300, 183
+ 112 → 288 hole                    → holes: 100, 176, 200, 300, 183
+ 426 → no hole ≥ 426               → MUST WAIT (although 959 KB are free in total)
+
+ BEST FIT
+ 212 → 300 hole (smallest that fits) → holes: 100, 500, 200, 88, 600
+ 417 → 500 hole                      → holes: 100, 83, 200, 88, 600
+ 112 → 200 hole                      → holes: 100, 83, 88, 88, 600
+ 426 → 600 hole                      → holes: 100, 83, 88, 88, 174   all four placed
+
+ WORST FIT
+ 212 → 600 hole (largest)  → holes: 100, 500, 200, 300, 388
+ 417 → 500 hole            → holes: 100, 83, 200, 300, 388
+ 112 → 388 hole            → holes: 100, 83, 200, 300, 276
+ 426 → no hole ≥ 426       → MUST WAIT
+```
+
+In this example best fit places everything, and first fit and worst fit leave the 426 KB process waiting even though enough memory is free in total: external fragmentation in action. The general results usually quoted are that first fit and best fit use memory about equally well, first fit is faster (it stops searching early), best fit tends to leave many tiny unusable holes, and worst fit is usually worst. A classic observation for first fit, the **50-percent rule**, is that with N allocated blocks, about 0.5 N further blocks are lost to fragmentation, so up to a third of memory can be unusable.
+
+#### Mechanism 3: compaction
+
+**Compaction** moves allocated regions together so that the free space forms one large hole. It requires that processes can be relocated while running (possible with base registers, since only the base changes), and it is expensive: everything moved must be copied, and the processes must be paused. The tracing garbage collectors of Chapter 2 (Section 2.8) compact heaps for the same reason.
+
+#### Guarantees, limits and interview traps
+
+Contiguous allocation guarantees simple, fast address translation (one addition and one comparison). It does not avoid external fragmentation, cannot easily let a process grow (the memory after it may be taken), and needs the whole process in memory. Typical traps: confusing internal fragmentation (waste inside an allocated block) with external fragmentation (waste between blocks), and claiming that best fit is always best (it minimises the leftover of each choice, not overall fragmentation).
+
+#### Backend connection
+
+You will not configure contiguous allocation in a modern OS, but you will meet its failure. A long-running service whose heap or memory allocator has become fragmented reports plenty of free memory and still fails large allocations, or its resident memory keeps growing although its live data does not (Section 3.18). The cure is the same as here: compaction (a compacting garbage collector), or allocators that group objects by size.
+
+### Drill for this section
+
+**C1. What is the difference between multiprogramming, multitasking and multiprocessing?**
+A strong answer must mention:
+- Multiprogramming: several programs in memory; the CPU switches when one waits for I/O; goal is CPU utilisation.
+- Multitasking (time-sharing): adds preemption by time slices; goal is response time; possible on one core.
+- Multiprocessing: several CPUs or cores running tasks at the same instant (symmetric or asymmetric).
+- Multithreading is several threads inside one process; real-time systems add deadlines (hard or soft).
+*Common weak answer:* treating multitasking and multiprocessing as synonyms. One time-slices a CPU, the other adds CPUs.
+
+**C2. What happens when you switch on a computer?**
+A strong answer must mention:
+- Firmware (BIOS or UEFI) runs a self-test and finds a boot device.
+- The bootloader loads the kernel and an initial RAM filesystem.
+- The kernel initialises memory management, interrupts and drivers, and mounts the root filesystem.
+- It starts PID 1 (init or systemd), which starts the services; a container skips all of this and starts as a process on a running kernel.
+*Common weak answer:* "the OS loads from disk." It names no stage and cannot explain why a VM takes seconds to start and a container milliseconds.
+
+**C3. Compare first fit, best fit and worst fit. What is the difference between internal and external fragmentation?**
+A strong answer must mention:
+- Contiguous allocation places each process in one free hole; base and limit registers relocate and protect it.
+- First fit takes the first hole big enough (fast); best fit the smallest (small leftovers, many tiny holes); worst fit the largest (usually worst).
+- Internal fragmentation is waste inside an allocated block (fixed partitions); external is free memory split into unusable pieces (variable partitions).
+- Remedies: compaction (expensive), or paging, which removes external fragmentation by using fixed-size frames.
+*Common weak answer:* "best fit is always best." It minimises each leftover, not overall fragmentation, and is slower to search.
+
+---
+
 ---
 
 ## Chapter Summary
@@ -1951,6 +2127,8 @@ A **thread** is a flow of execution within a process. Threads share the address 
 The **scheduler** decides which ready thread runs. FCFS suffers the convoy effect; SJF and SRTF minimise average waiting but need the future and can starve long jobs; Round Robin gives fast response at the cost of switching overhead; MLFQ learns which threads are interactive; aging prevents starvation. Linux schedules for fairness by virtual runtime. Each **context switch** saves and restores registers and possibly the address space, and its indirect cost (cold caches and TLB) is why oversubscribing CPU-bound threads lowers throughput. **Load average** counts runnable and uninterruptible threads, not CPU usage. **Throttling** under a CPU quota freezes all of a container's threads until the next period.
 
 **Virtual memory** gives each process private addresses that the MMU translates to physical frames through **multi-level page tables**, made fast by the **TLB** and helped by **huge pages**. Pages are allocated on demand; the first touch is a **minor fault**, a page that must come from disk is a **major fault**, and COW and **mmap** are built on the same fault mechanism. When RAM is full, the kernel evicts pages using LRU approximations; FIFO can even get worse with more memory (**Belady's anomaly**). When working sets exceed RAM, the system **thrashes**. Swap makes latency unpredictable, overcommit lets processes reserve more than exists, and when the bet fails the **OOM killer** sends `SIGKILL`, leaving no application log. The OS measures **RSS**, not your heap, and RSS includes stacks, native memory, code and shared pages. Read `top`, `vmstat`, `ps` and `/proc` to tell CPU saturation, storage stalls, memory pressure and "waiting on something else" apart.
+
+Section 3.20 adds the classic textbook topics. Multiprogramming keeps several programs in memory to use the CPU during I/O waits, multitasking adds time slices for responsiveness, and multiprocessing adds CPUs. Booting runs firmware, then a bootloader, then the kernel, then PID 1. Contiguous allocation places each process in one hole (first, best or worst fit) and suffers the external fragmentation that paging removes.
 
 ## Guarantees vs. Non-Guarantees
 

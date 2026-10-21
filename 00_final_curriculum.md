@@ -127,6 +127,7 @@ Chapter close
 17. Swap and why backends avoid it. The OOM killer. Memory overcommit
 18. What the OS measures: VSZ vs RSS vs a runtime heap; why a process with a 2 GB heap uses 3 GB of RSS
 19. Diagnosis lab: `top/htop`, `ps`, `vmstat`, `/proc/<pid>`, high CPU vs high load vs high iowait; a process "vanished" (OOM)
+20. Classic textbook topics (added 2026-10-21 for CS-fundamentals interviews): batch vs multiprogramming vs multitasking vs multiprocessing vs real-time, the boot process, contiguous memory allocation (first/best/worst fit, compaction)
 
 *Not here:* files/I/O (Ch 4), locks and synchronization (Ch 5).
 
@@ -149,6 +150,7 @@ Chapter close
 10. **Isolation:** VMs (hypervisor types 1/2, hardware virtualisation) vs **containers** (shared kernel; namespaces: pid, net, mnt, uts, ipc, user; **cgroups**: CPU quota/shares, memory limits). Container images as layered filesystems. Security implications of a shared kernel. **VM vs container comparison table**
 11. Running a server process well: PID 1 in containers, signal forwarding, graceful shutdown sequence
 12. Diagnosis lab: `lsof`, `strace`, `iostat`, `ss`, `dmesg`; FD leak; cgroup CPU throttling; disk-full; slow fsync
+13. Classic textbook topics (added 2026-10-21 for CS-fundamentals interviews): disk scheduling (FCFS, SSTF, SCAN, LOOK, C-SCAN, C-LOOK), file allocation (contiguous, linked, indexed; inode pointers), free-space management, RAID 0/1/5/6/10
 
 ---
 
@@ -197,6 +199,7 @@ Chapter close
 12. Latency, bandwidth, throughput, BDP, RTT, packet loss and its effect on throughput. Tail latency
 13. Load balancing primer: L4 vs L7 (detail in Ch 10)
 14. Diagnosis lab: refused vs connect timeout vs read timeout vs reset vs unknown host vs no route. Tools: `ping`, `traceroute`, `dig`, `ss`, `tcpdump`/Wireshark reading
+15. Classic textbook topics (added 2026-10-21 for CS-fundamentals interviews): hub/bridge/switch/router and collision vs broadcast domains, topologies, circuit vs packet switching, unicast/broadcast/multicast/anycast, classful addressing and subnetting practice, parity/checksum/CRC/Hamming, stop-and-wait/Go-Back-N/selective repeat, ALOHA and CSMA/CD vs CSMA/CA, distance-vector vs link-state routing (RIP, OSPF), BGP
 
 ---
 

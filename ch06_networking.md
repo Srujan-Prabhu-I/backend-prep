@@ -44,6 +44,8 @@ This chapter opens the box. Most failures you will debug between machines are me
 
 **Scope.** Here: the layered model, Ethernet and ARP, IP addressing and routing, ICMP, DHCP, NAT, firewalls, DNS, ports, TCP in depth, UDP, QUIC as a transport, the network view of sockets, network performance arithmetic, an L4/L7 primer, and wire-level diagnosis. The socket system calls and kernel queues were taught in Chapter 4 (Section 4.6) and are only recalled. HTTP (including HTTP/2 and HTTP/3 framing) is Chapter 7. Cryptography and the TLS handshake are Chapter 8. Load balancer and reverse proxy architecture is Chapter 10. Timeouts, retries and backoff as design tools are Chapter 24; idempotency keys are Chapter 13.
 
+**Classic textbook topics.** Section 6.15 covers topics that networks courses and campus interviews ask about but a backend rarely configures: network devices and collision and broadcast domains, topologies, circuit versus packet switching, cast types, classful addressing and subnetting practice, error detection (parity, checksum, CRC, Hamming), stop-and-wait, Go-Back-N and selective repeat, CSMA/CD and CSMA/CA, and routing algorithms (distance vector, link state, BGP).
+
 ---
 
 ## 6.1 Layering and Encapsulation
@@ -1784,6 +1786,363 @@ These tools show what the local host sent and received. They do not show what ha
 
 Every client library and pool should report connect time, time to first byte and total time as separate measurements, with connect timeouts and read timeouts configured separately and explicitly. Then the logs already say which row of the failure table you are in.
 
+## 6.15 Classic Textbook Topics: Devices, Switching, Addressing, Error Control, Medium Access, Routing
+
+University computer-networks courses, campus placement interviews and written tests ask about a set of topics that the rest of this chapter skipped or only mentioned, because a backend engineer rarely configures them. This section teaches each one to interview depth and ties it back to the mechanisms you already know.
+
+### Network devices, collision domains and broadcast domains
+
+#### Definitions
+
+- A **repeater** regenerates a signal to extend a cable's reach (L1).
+- A **hub** is a multi-port repeater: a signal arriving on one port is copied to **every** other port (L1). It understands nothing about frames.
+- A **bridge** connects two network segments and forwards frames between them by MAC address, learning which addresses are on which side (L2).
+- A **switch** is a multi-port bridge (L2), as described in Section 6.2.
+- A **router** forwards packets between networks by IP address (L3, Section 6.3).
+- A **gateway** is a general term for a device that connects networks that speak different protocols, translating between them; in everyday IP networking, "default gateway" just means the local router (Section 6.3).
+- A **collision domain** is a set of interfaces whose transmissions can collide with each other because they share one medium. A **broadcast domain** (Section 6.2) is a set of interfaces that all receive each other's broadcast frames.
+
+#### Mechanism: what each device separates
+
+```text
+ HUB: one collision domain, one broadcast domain
+   A ──┐
+   B ──┼── [hub] ── every frame goes to every port; two senders at once collide
+   C ──┘
+
+ SWITCH: one collision domain PER PORT, one broadcast domain (per VLAN)
+   A ── [p1]
+   B ── [p2]  switch  ── frames go only to the right port; broadcasts still reach all
+   C ── [p3]
+
+ ROUTER: separates broadcast domains; each interface is its own network
+   LAN 1 ── [eth0]  router  [eth1] ── LAN 2     broadcasts on LAN 1 never reach LAN 2
+```
+
+| Device | Layer | Forwards by | Collision domains | Broadcast domains |
+|---|---|---|---|---|
+| Repeater / hub | L1 | nothing: copies bits everywhere | one for all ports | one |
+| Bridge / switch | L2 | MAC address | one per port | one (per VLAN) |
+| Router | L3 | IP address | one per interface | one per interface |
+
+#### Interview traps and backend connection
+
+The classic question "hub vs switch vs router" is answered by this table plus one reason each: hubs share bandwidth and collide, switches learn MAC addresses and isolate collisions, routers separate broadcast domains and connect different IP networks. Hubs have essentially disappeared; in a data centre every link is a switch port running full duplex, so collisions no longer occur at all. What remains relevant is the broadcast domain: ARP and DHCP (Sections 6.2 and 6.4) work only inside one, which is why a cloud subnet or a VLAN is the boundary of "directly reachable".
+
+### Network topologies
+
+#### Definition
+
+A **topology** is the shape in which devices are connected.
+
+| Topology | Shape | Strength | Weakness |
+|---|---|---|---|
+| **Bus** | every device on one shared cable | cheap, simple | one cable fault stops everything; all share bandwidth and collide |
+| **Star** | every device to a central hub or switch | easy to add devices; one cable fault affects one device | the centre is a single point of failure |
+| **Ring** | each device connected to two neighbours in a loop | predictable access | one break can stop the ring (unless it is doubled) |
+| **Mesh** | devices connected to many others; **full mesh**: every pair connected | many paths, high resilience | a full mesh of n nodes needs n(n − 1)/2 links (45 for 10 nodes, 4,950 for 100) |
+| **Tree / hybrid** | stars connected hierarchically | scales | upper levels carry more traffic |
+
+#### Backend connection
+
+Modern data centres use a **leaf–spine** design (a form of Clos network): every server's switch (leaf) connects to every core switch (spine), so any two servers are two switch hops apart and there are many equal paths between them. The internet as a whole is an irregular mesh of networks, which is why routing (below) must find paths dynamically.
+
+### Circuit switching and packet switching
+
+#### Definitions
+
+- **Circuit switching** reserves a dedicated path and fixed capacity between two endpoints for the whole conversation, set up before any data flows. The classic telephone network works this way.
+- **Packet switching** divides data into packets that are forwarded independently, hop by hop, sharing every link with other traffic; capacity is not reserved. The internet works this way (Section 6.3).
+- **Message switching**, a historical third model, forwards whole messages store-and-forward from node to node.
+
+#### Mechanism and comparison
+
+| | Circuit switching | Packet switching |
+|---|---|---|
+| Setup | a connection must be set up first | none (each packet carries its destination) |
+| Capacity | reserved, even when idle | shared on demand (**statistical multiplexing**) |
+| Delay | constant once set up | variable: queuing at routers (Section 6.12) |
+| Efficiency for bursty traffic | poor: reserved capacity sits idle | good |
+| Failure of a link | the circuit breaks | packets can be routed around it |
+
+Packet switching won for data because computer traffic is **bursty**: a user idle for 90% of the time would waste 90% of a reserved circuit. Its price is variable delay and the possibility of loss when queues overflow, which is exactly what TCP's retransmission and congestion control exist to handle (Section 6.8).
+
+### Unicast, broadcast, multicast and anycast
+
+- **Unicast**: one sender to one receiver. Almost all backend traffic.
+- **Broadcast**: one sender to every host in the broadcast domain (`ff:ff:ff:ff:ff:ff`, or the subnet's broadcast IP address). Used by ARP and DHCP; does not cross routers.
+- **Multicast**: one sender to a **group** of interested receivers (IPv4 addresses `224.0.0.0/4`; hosts join groups with IGMP). Used inside some networks for market data feeds and service discovery; rarely available across the public internet or in many cloud networks.
+- **Anycast**: one address announced from **many locations**; routing delivers each packet to the nearest one. This is how the 13 root DNS server identities are served by many machines worldwide (Section 6.6), and how many CDNs and public DNS resolvers (`1.1.1.1`, `8.8.8.8`) put a nearby server behind one address.
+
+### Classful addressing, and subnetting practice
+
+#### Definition
+
+Before CIDR (Section 6.3), IPv4 addresses were divided into fixed **classes** by their first bits, and the class decided the network/host split.
+
+| Class | First bits | First-byte range | Default mask | Networks | Hosts per network |
+|---|---|---|---|---|---|
+| A | `0` | 0–127 | `/8` (255.0.0.0) | 126 usable (0 and 127 reserved; 127 is loopback) | 16,777,214 |
+| B | `10` | 128–191 | `/16` (255.255.0.0) | 16,384 | 65,534 |
+| C | `110` | 192–223 | `/24` (255.255.255.0) | 2,097,152 | 254 |
+| D | `1110` | 224–239 | | multicast groups | |
+| E | `1111` | 240–255 | | reserved | |
+
+#### Why it was abandoned
+
+The classes were too coarse. An organisation with 2,000 hosts was too big for a class C (254) and received a class B (65,534), wasting over 60,000 addresses, and every class C network needed its own entry in backbone routing tables. **CIDR** (introduced in 1993) removed the classes: any prefix length is allowed, blocks can be sized to need, and adjacent blocks can be summarised by one shorter prefix (**route aggregation**). Classful terms survive only as vocabulary: "a class C" is often said to mean "a /24". The interview trap is to assume, today, that an address's first byte decides its mask; only the configured prefix does.
+
+#### Concrete: subnetting arithmetic
+
+Typical exercise: **divide `192.168.10.0/24` into 4 equal subnets.**
+
+1. Four subnets need 2 extra network bits (2² = 4), so the prefix becomes /24 + 2 = **/26**.
+2. Each /26 has 32 − 26 = 6 host bits: 2⁶ = 64 addresses, of which 64 − 2 = **62** are usable hosts (minus network and broadcast addresses, Section 6.3).
+3. The subnets step by 64 in the last byte:
+
+```text
+ subnet               network address    first host      last host       broadcast
+ 192.168.10.0/26      192.168.10.0       .1              .62             .63
+ 192.168.10.64/26     192.168.10.64      .65             .126            .127
+ 192.168.10.128/26    192.168.10.128     .129            .190            .191
+ 192.168.10.192/26    192.168.10.192     .193            .254            .255
+```
+
+The general formulas: borrowing b bits gives 2^b subnets; leaving h host bits gives 2^h − 2 usable hosts per subnet. The reverse question, "which prefix gives at least 50 hosts per subnet?", needs the smallest h with 2^h − 2 ≥ 50, which is h = 6, so a /26.
+
+### Error detection and correction
+
+#### Definitions
+
+**Error detection** adds redundant bits to data so the receiver can tell, with high probability, that bits were changed in transit. **Error correction** adds enough redundancy to also repair some errors without retransmission.
+
+#### Mechanism: four techniques
+
+1. **Parity bit.** One extra bit makes the number of 1s even (even parity) or odd. It detects any **odd** number of flipped bits, and misses any even number. **Two-dimensional parity** (a parity bit for every row and every column of a block) can detect more and locate (therefore correct) a single flipped bit.
+
+2. **Internet checksum** (IPv4 header, TCP, UDP, Sections 6.3, 6.8 and 6.10). Add the data as 16-bit words using one's-complement arithmetic (carries wrap around to the low end), then invert the result. Example with two words:
+
+   ```text
+     0x4500
+   + 0x0073
+   = 0x4573          (no carry here)
+   checksum = NOT 0x4573 = 0xBA8C
+   receiver: 0x4500 + 0x0073 + 0xBA8C = 0xFFFF → all ones → no error detected
+   ```
+
+   Cheap to compute, but weak: reordering two 16-bit words gives the same sum.
+
+3. **CRC** (cyclic redundancy check; Ethernet's FCS is CRC-32, Section 6.1). Treat the data as a binary polynomial, append r zero bits, divide by an agreed **generator** polynomial of degree r using XOR (no carries), and send the r-bit **remainder** after the data. The receiver divides what it got by the same generator; a non-zero remainder means an error. Worked example with data `1101` and generator `1011` (x³ + x + 1, so r = 3):
+
+   ```text
+   data with 3 zeros appended:   1101000
+   1101 XOR 1011 = 0110     → 0110000
+    1100 XOR 1011 = 0111    → 0011100
+     1110 XOR 1011 = 0101   → 0001010
+      1010 XOR 1011 = 0001  → 0000001
+   remainder (last 3 bits) = 001
+   transmitted frame: 1101 001  =  1101001
+   receiver: 1101001 ÷ 1011 leaves remainder 000 → accepted
+   ```
+
+   A CRC with an r-bit remainder detects every burst error of length r or less, and is far stronger than a checksum for the same size, which is why link layers use it.
+
+4. **Hamming codes** (error correction). Several parity bits, each covering a different subset of positions, so that the pattern of failed checks names the position of a single flipped bit, which the receiver flips back. The underlying rule uses the **Hamming distance** (the number of bit positions in which two code words differ): to **detect** up to d errors, valid code words must be at least d + 1 apart; to **correct** up to d errors, at least 2d + 1 apart.
+
+#### Backend connection
+
+Every layer checks its own data: Ethernet's CRC per link, IP's header checksum per hop, TCP's checksum end to end. None of them is protection against deliberate tampering, which needs cryptographic MACs (Chapter 8, Section 8.5). Memory with ECC (error-correcting code) uses Hamming-style codes to fix single-bit memory errors in servers.
+
+### Reliable delivery protocols: stop-and-wait, Go-Back-N, selective repeat
+
+#### Definition
+
+An **ARQ** (automatic repeat request) protocol achieves reliable delivery over a lossy link by numbering frames, acknowledging them, and retransmitting those not acknowledged in time. These three are the textbook family that TCP's design (Section 6.8) draws from.
+
+#### Mechanism
+
+**Stop-and-wait.** Send one frame; wait for its acknowledgement; on timeout, resend. One-bit sequence numbers (0, 1) are enough to detect duplicates. Simple and very inefficient on long links. Its **efficiency** is the fraction of time the sender is actually transmitting:
+
+```text
+ efficiency = Tt / (Tt + 2 × Tp)        Tt = transmission time of a frame, Tp = one-way propagation
+
+ example: 1,000-bit frame on a 1 Mb/s link → Tt = 1 ms; Tp = 10 ms
+ efficiency = 1 / (1 + 20) ≈ 4.8%       the link is idle 95% of the time
+```
+
+This is the stop-and-wait calculation of Section 6.8 in textbook form, and the reason for sliding windows.
+
+**Go-Back-N (GBN).** The sender may have up to N unacknowledged frames in flight. The receiver accepts only frames **in order** and sends cumulative acknowledgements; it discards any frame that arrives after a gap. When a frame is lost, the sender times out and **resends that frame and every frame after it**.
+
+```text
+ window N = 4, frame 2 lost
+ sender:   0 1 2 3 4 5 ...           receiver: accepts 0, 1; discards 3, 4 (out of order)
+ timeout for 2 → resend 2, 3, 4, 5   (3 and 4 were received once already, and are sent again)
+```
+
+**Selective repeat (SR).** The receiver **buffers** out-of-order frames and acknowledges each frame individually; the sender resends **only** the frames that were not acknowledged.
+
+```text
+ window N = 4, frame 2 lost
+ receiver buffers 3 and 4, acknowledges 0, 1, 3, 4
+ sender resends only 2 → receiver delivers 2, 3, 4 in order
+```
+
+**Window limits with k-bit sequence numbers.** With 2^k sequence numbers, Go-Back-N's window can be at most 2^k − 1, and selective repeat's at most 2^(k − 1) (half the space). The reason for SR's tighter limit: if the window were larger, after all acknowledgements were lost the receiver could not tell a retransmitted old frame from a new frame that reuses the same number.
+
+| | Stop-and-wait | Go-Back-N | Selective repeat |
+|---|---|---|---|
+| Frames in flight | 1 | up to 2^k − 1 | up to 2^(k − 1) |
+| Receiver buffer | 1 frame | 1 frame (in order only) | a full window |
+| Acknowledgements | per frame | cumulative | per frame |
+| On loss, resend | the frame | the frame and all after it | only the lost frame |
+| Wasted bandwidth under loss | low (but idle time is high) | high | low |
+
+#### Backend connection
+
+TCP is a hybrid: its cumulative acknowledgements resemble Go-Back-N, while receiver buffering of out-of-order segments plus SACK (Section 6.8) gives it the selective retransmission of selective repeat. Its 32-bit byte sequence numbers and window scaling are the "k-bit sequence space" problem solved at scale, and `TIME_WAIT` (Section 6.8) exists partly so that old segments cannot be confused with new ones that reuse the same numbers.
+
+### Medium access control: ALOHA, CSMA/CD, CSMA/CA
+
+#### Definition
+
+When several stations share one medium (a bus cable, a hub, a radio channel), a **medium access control** (MAC) protocol decides who may transmit when, so that simultaneous transmissions (collisions) are avoided or recovered from.
+
+#### Mechanism
+
+- **ALOHA**: transmit whenever you have data; if no acknowledgement comes, wait a random time and resend. Simple and wasteful: the maximum useful throughput of pure ALOHA is about 18% of the channel; **slotted ALOHA**, which only starts transmissions at slot boundaries, doubles it to about 37%.
+- **CSMA** (carrier sense multiple access): **listen before transmitting**; send only if the medium is idle. Collisions still happen when two stations start at almost the same moment.
+- **CSMA/CD** (collision detection), classic shared Ethernet:
+  1. Listen; when the medium is idle, transmit.
+  2. While transmitting, keep listening. If a collision is detected, stop and send a short **jam** signal so that every station notices.
+  3. Wait a random backoff and retry. After the n-th collision in a row, choose the wait uniformly from 0 to 2^n − 1 slot times (**binary exponential backoff**, capped after 10 doublings; give up after 16 attempts).
+
+  Collision detection only works if a sender is still transmitting when news of a collision returns from the far end of the cable. That is why Ethernet has a **minimum frame size**: 64 bytes (512 bit times) is long enough to cover the round-trip time on the longest cable the standard allowed. (This is the origin of the padding to 64 bytes mentioned in Section 6.1.)
+- **CSMA/CA** (collision avoidance), Wi-Fi (802.11): a radio cannot hear a collision while it transmits, and two stations may each hear the access point but not each other (the **hidden terminal problem**). So stations wait a random backoff even when the channel seems idle, the receiver acknowledges every frame (no acknowledgement means retry), and stations may reserve the channel first with short **RTS/CTS** (request to send / clear to send) messages.
+
+#### Backend connection
+
+Switched, full-duplex Ethernet has no shared medium, so CSMA/CD no longer runs in data centres. Two ideas from it are everywhere in backend engineering: **binary exponential backoff with randomness** is exactly how clients should space out retries so that they do not collide again in lockstep (backoff and jitter, Chapter 24), and Wi-Fi's contention is one reason mobile clients see higher and more variable latency and loss than wired ones (Section 6.12).
+
+### Routing algorithms and protocols
+
+#### Definitions
+
+A **routing algorithm** computes, for each router, the next hop toward every destination network. **Static routing** uses routes entered by hand; **dynamic routing** lets routers exchange information and recompute routes when links change. An **autonomous system** (AS) is a network under one administration (an ISP, a cloud provider, a large company), identified by an AS number. **Interior** routing protocols run inside an AS; the **exterior** protocol, BGP, runs between them.
+
+#### Mechanism 1: distance vector (Bellman–Ford), RIP
+
+Each router keeps a table of (destination, distance, next hop) and periodically sends its **distance vector** (its distances to every destination) to its neighbours. On receiving a neighbour's vector, a router applies the Bellman–Ford rule:
+
+```text
+ my distance to D = min over neighbours N of ( cost(me → N) + N's distance to D )
+```
+
+Knowledge spreads one hop per exchange, so it converges slowly, and bad news spreads especially slowly. **Count to infinity**:
+
+```text
+ line A ── B ── C, each link cost 1. A reaches C via B at distance 2.
+ the link B–C fails. B no longer reaches C directly, but A still advertises "C at 2".
+ B: "via A, C is 2 + 1 = 3"   A: "via B, C is 3 + 1 = 4"   B: "5"   A: "6" ...
+ the two routers bounce the route between them, counting up, until a cap is reached
+```
+
+Fixes: **split horizon** (never advertise a route back to the neighbour you learned it from), **poison reverse** (advertise it back with infinite distance), and a small maximum. **RIP** (Routing Information Protocol) is the classic distance-vector protocol: hop-count metric, 15 hops maximum (16 means unreachable), updates every 30 seconds.
+
+#### Mechanism 2: link state (Dijkstra), OSPF
+
+Each router tells **every** router in the area about its own links and their costs, by flooding **link-state advertisements**. Every router therefore has the complete map, and runs **Dijkstra's shortest-path algorithm** on it itself. Worked example: links A–B 1, A–C 4, B–C 2, B–D 5, C–D 1, computed from A:
+
+```text
+ start:            A = 0; B, C, D = ∞
+ settle A (0):     B = 1 (via A), C = 4 (via A)
+ settle B (1):     C = min(4, 1 + 2) = 3 (via B); D = 1 + 5 = 6 (via B)
+ settle C (3):     D = min(6, 3 + 1) = 4 (via C)
+ settle D (4).
+ result from A:    B 1 (next hop B), C 3 (next hop B), D 4 (next hop B, path A–B–C–D)
+```
+
+**OSPF** (Open Shortest Path First) and IS-IS are link-state protocols. Compared with distance vector, they converge faster and avoid count-to-infinity, at the cost of more memory and computation (every router stores the whole map).
+
+| | Distance vector (RIP) | Link state (OSPF) |
+|---|---|---|
+| What is shared | my distances to everyone, with neighbours | my links, with everyone |
+| Who computes | each router from neighbours' vectors (Bellman–Ford) | each router from the full map (Dijkstra) |
+| Convergence | slow; count-to-infinity possible | fast |
+| Resource use | low | higher (full topology in every router) |
+
+#### Mechanism 3: BGP, between autonomous systems
+
+**BGP** (Border Gateway Protocol) connects the autonomous systems that make up the internet. It is a **path-vector** protocol: each route announcement carries the list of ASes it has passed through, which prevents loops (an AS rejects a path that already contains itself) and lets operators apply **policy** (prefer paths through cheaper partners, refuse paths through certain networks) rather than just shortest distance. BGP sessions run over TCP (port 179).
+
+#### Guarantees, limits and interview traps
+
+Routing protocols guarantee that, after convergence, routers agree on loop-free paths according to their metrics or policies. During convergence, packets can loop (until TTL expires, Section 6.3) or be dropped. BGP has historically trusted what neighbours announce; mistaken or malicious announcements (**route leaks** and **hijacks**) have redirected or blackholed traffic for large parts of the internet, which is why mechanisms that let networks verify who may announce a prefix (RPKI) are being deployed. A common interview mistake is to call RIP "Dijkstra-based" or OSPF "distance vector".
+
+#### Backend connection
+
+You will not configure OSPF or BGP for a typical service, but they explain incidents you will see: a cloud region becoming unreachable from some ISPs while others are fine (a BGP problem upstream), traffic suddenly taking a longer path and raising RTT (a routing change, visible in `traceroute`, Section 6.3), and anycast services (DNS, CDNs) whose "nearest" location is decided by BGP. Inside clouds and Kubernetes clusters, BGP is also used by some networking layers to announce pod and service addresses.
+
+### Drill for this section
+
+**C1. What is the difference between a hub, a switch and a router? What are collision and broadcast domains?**
+A strong answer must mention:
+- Hub (L1) copies bits to every port: one collision domain, one broadcast domain.
+- Switch (L2) forwards by learned MAC addresses: a collision domain per port, one broadcast domain per VLAN.
+- Router (L3) forwards by IP and separates broadcast domains; ARP and DHCP stay inside one.
+- Full-duplex switched Ethernet has no collisions in practice.
+*Common weak answer:* "a router is a smarter switch." The real difference is the layer and the addresses each forwards by, which decides what it separates.
+
+**C2. What were IP address classes, why were they replaced by CIDR, and how do you split a /24 into four subnets?**
+A strong answer must mention:
+- Classes A, B, C by first bits, with default /8, /16, /24 masks; D for multicast, E reserved.
+- They were too coarse (wasted addresses, bloated routing tables); CIDR allows any prefix and route aggregation.
+- Four subnets need 2 more bits: /26, 64 addresses and 62 hosts each, at .0, .64, .128, .192.
+- Formulas: 2^b subnets for b borrowed bits, 2^h − 2 hosts for h host bits.
+*Common weak answer:* "10.x.x.x is class A, so its mask is /8." Today the configured prefix decides the mask, not the first byte.
+
+**C3. How do parity, checksums and CRCs detect errors? What does a Hamming code add?**
+A strong answer must mention:
+- Parity detects an odd number of flipped bits only.
+- The Internet checksum is a one's-complement sum of 16-bit words: cheap but weak (it misses reordered words).
+- A CRC divides by a generator polynomial with XOR and sends the remainder; an r-bit CRC catches all bursts up to r bits (Ethernet uses CRC-32).
+- Hamming codes locate and correct single-bit errors; detecting d errors needs distance d + 1, correcting d needs 2d + 1; none of these resists deliberate tampering.
+*Common weak answer:* "the checksum makes the data secure." It catches accidents only; an attacker simply recomputes it.
+
+**C4. Compare stop-and-wait, Go-Back-N and selective repeat. Which one is TCP?**
+A strong answer must mention:
+- Stop-and-wait: one frame at a time; efficiency Tt / (Tt + 2Tp), tiny on long links.
+- Go-Back-N: a window of frames, in-order receiver, cumulative ACKs; on loss, resend from the lost frame onward; window ≤ 2^k − 1.
+- Selective repeat: receiver buffers out-of-order frames, per-frame ACKs, resend only the lost frame; window ≤ 2^(k − 1).
+- TCP is a hybrid: cumulative ACKs like Go-Back-N, plus buffering and SACK like selective repeat.
+*Common weak answer:* "TCP uses Go-Back-N." TCP buffers out-of-order data and retransmits selectively with SACK.
+
+**C5. How do CSMA/CD and CSMA/CA work, and why does Wi-Fi need the second?**
+A strong answer must mention:
+- Carrier sense: listen before transmitting.
+- CSMA/CD (shared Ethernet): detect a collision while sending, jam, binary exponential backoff; the 64-byte minimum frame exists so collisions are detected.
+- CSMA/CA (Wi-Fi): a radio cannot detect collisions while transmitting, and hidden terminals cannot hear each other, so it backs off before sending, acknowledges every frame, and can reserve the channel with RTS/CTS.
+- Exponential backoff with randomness is the same idea as retry backoff and jitter (Chapter 24).
+*Common weak answer:* "CSMA/CA is just CSMA/CD for Wi-Fi." It avoids collisions because it cannot detect them.
+
+**C6. Distance vector versus link state routing? What is count to infinity, and what does BGP do?**
+A strong answer must mention:
+- Distance vector (RIP): share distance tables with neighbours; Bellman–Ford; slow convergence; count to infinity, reduced by split horizon and poison reverse; 15-hop limit.
+- Link state (OSPF): flood link costs to all routers; each runs Dijkstra on the full map; fast convergence, more memory and CPU.
+- BGP connects autonomous systems as a path-vector protocol, with AS paths for loop prevention and policy-based choices, over TCP.
+- Routing mistakes or hijacks in BGP cause internet-scale reachability incidents; anycast relies on BGP.
+*Common weak answer:* swapping the algorithms (calling OSPF distance vector). The defining question is what each router shares and with whom.
+
+**C7. Circuit switching versus packet switching, and unicast versus broadcast, multicast and anycast?**
+A strong answer must mention:
+- Circuit switching reserves a path and capacity before data flows (constant delay, idle waste); packet switching shares links per packet (statistical multiplexing, variable delay, loss).
+- Data networks use packet switching because traffic is bursty; TCP handles the resulting loss and queuing.
+- Unicast one to one; broadcast to the whole local broadcast domain; multicast to a joined group.
+- Anycast puts one address in many places and routing picks the nearest, as root DNS servers and CDNs do.
+*Common weak answer:* "packet switching is faster." Its advantage is efficiency for bursty traffic, not lower delay.
+
+---
+
 ---
 
 ## Chapter Summary
@@ -1797,6 +2156,8 @@ On a local network, **switches** learn which MAC address is on which port and fo
 The **4-tuple** identifies a connection, which is why one server port can carry any number of clients but one client address can open only about 28,000 connections to one destination address and port. **TCP** builds a reliable, ordered byte stream on top of IP: a **three-way handshake** exchanges random initial sequence numbers in one round trip; **sequence and cumulative acknowledgement numbers**, SACK, **fast retransmit** and a **retransmission timer** with exponential backoff recover from loss; **flow control** (`rwnd`) protects the receiver and **congestion control** (`cwnd`: slow start, then additive increase and multiplicative decrease, CUBIC or BBR) protects the network. **Nagle** and **delayed ACK** can combine into a 40 ms stall. Closing uses a FIN in each direction; the passive side waits in **`CLOSE_WAIT`** for its application (a growing count is a leak) and the active side holds the 4-tuple in **`TIME_WAIT`** for 2 × MSL so that a lost final ACK can be repeated and old segments cannot leak into a new connection. **RST** aborts. Crucially, TCP has **no message boundaries** (applications must frame), its ACKs come from the **kernel** (they say nothing about processing), and it cannot provide **exactly-once** execution: a timeout leaves the outcome unknown, and only application-level idempotency makes retries safe.
 
 **UDP** offers datagrams with boundaries and nothing else, which suits DNS, media and protocols that bring their own reliability. **QUIC** builds independent encrypted streams on UDP, removing TCP's **head-of-line blocking** between streams, merging the transport and TLS handshakes, and surviving address changes. Performance is governed by **RTT** (bounded by the speed of light), **bandwidth**, the **bandwidth-delay product** that windows must cover, and **loss**, which caps loss-based TCP throughput at roughly MSS / (RTT × √p) and shows up in p99 as retransmission timeouts. **L4** balancers choose per connection and **L7** balancers per request, which is why long-lived HTTP/2 connections pin load behind L4. Finally, every error message (refused, connect timeout, read timeout, reset, unknown host, no route) names a specific event on the wire, which `ping`, `traceroute`, `dig`, `ss` and `tcpdump` can confirm.
+
+Section 6.15 adds the classic textbook topics. Hubs, switches and routers differ in what they forward by and in which collision and broadcast domains they separate. Packet switching beat circuit switching for bursty data, and classful addressing gave way to CIDR. Parity, checksums, CRCs and Hamming codes detect or correct accidental errors. Stop-and-wait, Go-Back-N and selective repeat are the ancestors of TCP's windows, CSMA/CD and CSMA/CA arbitrate shared media with randomised backoff, and distance-vector, link-state and path-vector (BGP) routing compute the paths that IP packets follow.
 
 ---
 

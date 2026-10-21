@@ -41,6 +41,8 @@ These mechanisms are behind some of the most common production incidents: "Too m
 
 **Scope.** Here: file descriptors, filesystems, the page cache and durability, I/O models, the socket system calls, zero-copy, inter-process communication, resource limits, and isolation with virtual machines, namespaces and cgroups. Processes, signals, the scheduler, virtual memory and the OOM killer were taught in Chapter 3 and are only recalled. Race conditions, locks and the programming model of event loops (callbacks, futures, coroutines) are in Chapter 5. TCP itself (the handshake, retransmission, `TIME_WAIT`, ports) is in Chapter 6. How a server combines these system calls into an accept → parse → dispatch pipeline is in Chapter 10, and how it sizes its thread pools is in Chapter 11. How a database uses `fsync`, the write-ahead log and its own buffer pool is in Chapter 15. Container orchestration is in Chapter 26.
 
+**Classic textbook topics.** Section 4.13 covers topics that operating-systems courses and campus interviews ask about: disk scheduling algorithms, file allocation methods, free-space management and RAID levels.
+
 ---
 
 ## 4.1 Everything Is a File: File Descriptors
@@ -1659,6 +1661,189 @@ For listening sockets, remember: `Recv-Q` = current accept queue length, `Send-Q
 
 `df -h` and `df -i` (space and inodes per filesystem), `du -sh <dir>` (space used by files that still have names), `free -m` and `/proc/meminfo` (page cache and dirty data), `/proc/<pid>/fd` and `/proc/<pid>/limits` (FDs and limits), and the cgroup files `cpu.stat`, `memory.events`, `memory.stat` and `pids.current` (Section 4.10).
 
+## 4.13 Classic Textbook Topics: Disk Scheduling, File Allocation, Free Space, and RAID
+
+These four topics are standard in operating-systems courses, campus placement interviews and written tests. Modern storage has changed how much they matter in production (SSDs have no moving head; filesystems use extents; clouds hide RAID inside virtual disks), but you are expected to explain them, and each one still explains a real backend behaviour.
+
+### Disk scheduling
+
+#### Definition
+
+**Disk scheduling** is the choice of the order in which an operating system serves pending requests to a hard disk. On an HDD (Chapter 2, Section 2.4), the dominant cost of a random request is the **seek**: moving the read/write head to the right track (cylinder). A scheduling algorithm tries to reduce total head movement, and with it average waiting time, without starving any request.
+
+#### Why it exists
+
+If requests for cylinders 98, 183, 37 and 122 are served in arrival order, the head swings back and forth across the platter; each seek costs milliseconds. Reordering the same requests can cut head movement by more than half, which directly raises the number of I/O operations per second the disk can do.
+
+#### Mechanism: the algorithms on one worked example
+
+The disk has cylinders 0–199. The head is at cylinder **53**. The queue, in arrival order, is **98, 183, 37, 122, 14, 124, 65, 67**.
+
+| Algorithm | Rule | Order served | Total head movement (cylinders) |
+|---|---|---|---|
+| **FCFS** (first come, first served) | arrival order | 98, 183, 37, 122, 14, 124, 65, 67 | 45+85+146+85+108+110+59+2 = **640** |
+| **SSTF** (shortest seek time first) | always the nearest pending request | 65, 67, 37, 14, 98, 122, 124, 183 | 12+2+30+23+84+24+2+59 = **236** |
+| **SCAN** (elevator), moving toward 0 | sweep in one direction to the end of the disk, then reverse | 37, 14, (to 0), 65, 67, 98, 122, 124, 183 | 53 (down to 0) + 183 (up to 183) = **236** |
+| **LOOK**, moving toward 0 | like SCAN, but reverse at the last request instead of the disk's end | 37, 14, 65, 67, 98, 122, 124, 183 | 39 (to 14) + 169 (to 183) = **208** |
+| **C-SCAN**, moving toward 199 | sweep up to the end, jump back to 0, sweep up again (serves only on the way up) | 65, 67, 98, 122, 124, 183, (to 199), (jump to 0), 14, 37 | 146 up + 37 after the jump = **183**, plus 199 if the return jump is counted |
+| **C-LOOK**, moving toward 199 | like C-SCAN, but jump from the last request to the lowest pending one | 65, 67, 98, 122, 124, 183, (jump to 14), 37 | 130 + 23 = **153**, plus 169 if the jump is counted |
+
+(Textbooks differ on whether the return jump of the circular variants is counted; say which convention you use.)
+
+```text
+ SSTF head path, starting at 53
+
+ cylinder:  14     37        53  65 67           98       122 124              183
+ step 1:                     ●──►●──►●                                            up 14
+ step 2:    ●◄─────●◄────────────────●                                            down 53
+ step 3:    ●────────────────────────────────────►●───────►●──►●────────────────►●   up 169
+            total: 14 + 53 + 169 = 236
+```
+
+How they compare:
+
+- **FCFS** is fair and simple, and wastes the most movement.
+- **SSTF** greatly reduces movement but can **starve** requests far from the head if new nearby requests keep arriving (the same starvation as shortest-job-first CPU scheduling, Chapter 3, Section 3.10).
+- **SCAN and LOOK** bound the wait: every request is reached within one sweep in each direction. Requests just behind the head wait longest.
+- **C-SCAN and C-LOOK** give more uniform waiting times, because the disk is always swept in the same direction.
+
+#### Guarantees, limits and interview traps
+
+These algorithms reduce seek time on rotating disks; they do nothing for rotational latency directly, and nothing on SSDs, which have no head (Chapter 2, Section 2.4). The usual trap is calling SSTF "optimal": it is greedy, not optimal, and it starves.
+
+#### Backend connection
+
+On Linux, the block layer's I/O schedulers (`mq-deadline`, `bfq`, `kyber`, or `none`) descend from these ideas but aim at fairness and latency rather than head movement. For NVMe SSDs, `none` is common because reordering gains nothing. What survives in backend design is the principle: sequential access is cheap and random access is expensive on HDDs (with a much smaller gap on SSDs), which is why databases write logs sequentially (Chapter 15) and why batching and sorting I/O requests still helps.
+
+### File allocation methods
+
+#### Definition
+
+A **file allocation method** is how a filesystem decides which disk blocks hold a file's data, and how it finds them again. The three classic methods are **contiguous**, **linked** and **indexed** allocation.
+
+#### Why it exists
+
+A file is a sequence of bytes (Section 4.1); a disk is a numbered array of blocks. The filesystem needs a mapping from "byte offset in this file" to "block number on disk" that is fast for sequential and random reads, lets files grow, and does not waste space.
+
+#### Mechanism
+
+```text
+ CONTIGUOUS: the file occupies blocks start .. start+length−1
+   directory entry:  report.txt  start=14  length=3
+   disk:  ... [14][15][16] ...
+
+ LINKED: each block holds a pointer to the next
+   directory entry:  report.txt  first=9  last=25
+   disk:  [9 | →16] ... [16 | →1] ... [1 | →25] ... [25 | end]
+   (FAT variant: the pointers live in a separate File Allocation Table in memory)
+
+ INDEXED: an index block lists all the file's block numbers
+   directory entry:  report.txt  index block=19
+   block 19:  [9, 16, 1, 10, 25, -, -, ...]
+```
+
+| | Contiguous | Linked | Indexed |
+|---|---|---|---|
+| Sequential read | excellent (one seek) | good, if blocks are close | good |
+| Random access to block i | O(1): start + i | O(i): follow i pointers | O(1) after reading the index |
+| External fragmentation | **yes** (like contiguous memory, Chapter 3, Section 3.20) | no | no |
+| Growing a file | hard: the next blocks may be taken | easy | easy, until the index is full |
+| Weak point | fragmentation, size known in advance | slow random access; one bad pointer loses the rest of the file | overhead of index blocks |
+
+**The Unix inode as indexed allocation.** A classic Unix inode (Section 4.2) holds 12 **direct** block pointers, then one **single indirect** pointer (to a block full of pointers), one **double indirect** and one **triple indirect**. With 4 KB blocks and 4-byte block numbers, one block holds 1,024 pointers, so:
+
+```text
+ direct:           12 × 4 KB                 =  48 KB
+ single indirect:  1,024 × 4 KB              =   4 MB
+ double indirect:  1,024² × 4 KB             =   4 GB
+ triple indirect:  1,024³ × 4 KB             =   4 TB
+```
+
+Small files need no extra lookups; huge files need up to three. Modern filesystems such as ext4 replace most of this with **extents** (Section 4.2): "blocks 1,000 to 1,999", a run of contiguous blocks recorded as one entry. Extents combine contiguous allocation's fast sequential access with indexed allocation's flexibility.
+
+### Free-space management
+
+#### Definition and mechanism
+
+The filesystem must also track which blocks are **free**. The classic methods:
+
+- **Bitmap**: one bit per block (1 = used, 0 = free). Compact (a 1 TB disk of 4 KB blocks needs a 32 MB bitmap) and makes it easy to find runs of free blocks.
+- **Linked list**: each free block points to the next free block. No extra space, but finding many free blocks means many reads.
+- **Grouping**: the first free block stores the addresses of n free blocks, the last of which stores the next n, and so on.
+- **Counting**: store (first free block, number of free blocks that follow), which is efficient when free space comes in runs. This is the free-space counterpart of extents.
+
+Free-space structures are why "the disk is full" has two forms: no free **blocks**, or no free **inodes** (Section 4.2), each with its own counter (`df` versus `df -i`).
+
+### RAID
+
+#### Definition
+
+**RAID** (redundant array of independent disks) combines several physical disks into one logical disk, for capacity, performance, protection against disk failure, or a combination.
+
+#### Why it exists
+
+A single disk fails eventually, and is limited in throughput. Spreading data across disks increases throughput, and storing redundant information lets the array survive a disk failure without losing data.
+
+#### Mechanism: the levels to know
+
+| Level | How | Usable capacity with n disks | Survives | Notes |
+|---|---|---|---|---|
+| **RAID 0** | **striping**: consecutive chunks go to different disks | n | **no** disk failure | fastest; losing any disk loses everything |
+| **RAID 1** | **mirroring**: each disk holds a full copy | 1 (of a pair) | n − 1 failures | fast reads, simple rebuild, half the space |
+| **RAID 5** | striping with **one parity block per stripe**, rotated across disks | n − 1 | **one** disk failure | each small write is a read-modify-write: read old data and old parity, write new data and new parity (four I/Os) |
+| **RAID 6** | striping with **two** independent parity blocks | n − 2 | **two** disk failures | slower writes than RAID 5; safer during long rebuilds |
+| **RAID 10** (1+0) | stripe across mirrored pairs | n / 2 | one disk per pair | common for databases: fast writes, fast rebuild |
+
+(RAID 2, 3 and 4, with bit-level, byte-level and dedicated-parity layouts, are mostly of historical interest; RAID 4's single parity disk became a write bottleneck, which RAID 5 solved by rotating parity.)
+
+**How parity rebuilds a lost disk.** Parity is the **XOR** (exclusive or: each result bit is 1 when the two input bits differ) of the data blocks in a stripe:
+
+```text
+ disk 1: 1010   disk 2: 0110   disk 3: 1100
+ parity = 1010 XOR 0110 XOR 1100 = 0000
+
+ disk 2 fails. Rebuild its block from the others:
+ 1010 XOR 1100 XOR 0000 (parity) = 0110   ← the lost data
+```
+
+XOR has the property that any one value can be recomputed from all the others.
+
+#### Guarantees, limits and interview traps
+
+RAID protects against **disk failure**. It does **not** protect against deleting the wrong file, application bugs that write bad data, ransomware or a destroyed machine: every one of those is faithfully replicated to all disks. **RAID is not a backup** (Chapter 15 covers backups). During a rebuild, a RAID 5 array has no redundancy left, and rebuilding a large disk reads every other disk in full, which can take many hours and increases the chance of a second failure; that is the reason for RAID 6 and RAID 10 on large disks.
+
+#### Backend connection
+
+In the cloud you rarely build RAID yourself: a block-storage volume is already replicated by the provider, and databases rely on replication across machines (Chapter 22) for availability. On your own hardware, RAID 10 is a common choice for database data, and RAID 5's write penalty is why it suits read-heavy rather than write-heavy workloads.
+
+### Drill for this section
+
+**C1. Compare the disk scheduling algorithms FCFS, SSTF, SCAN, LOOK and C-SCAN.**
+A strong answer must mention:
+- The goal: less head movement (seek time) on an HDD, without starving requests.
+- FCFS is fair but wasteful; SSTF serves the nearest request, cuts movement but can starve distant ones.
+- SCAN sweeps end to end like an elevator; LOOK reverses at the last request; C-SCAN and C-LOOK serve in one direction for more uniform waits.
+- A worked total (for example 640 for FCFS against 236 for SSTF on the classic queue), and that SSDs gain little from reordering.
+*Common weak answer:* "SSTF is optimal." It is greedy, not optimal, and it starves requests.
+
+**C2. Explain contiguous, linked and indexed file allocation. How does a Unix inode find a file's blocks?**
+A strong answer must mention:
+- Contiguous: fast sequential and random access, but external fragmentation and hard growth.
+- Linked: no fragmentation, easy growth, but random access is O(n) and a broken pointer loses the rest (FAT keeps the pointers in a table).
+- Indexed: an index block of pointers gives O(1) random access.
+- The inode's 12 direct, single, double and triple indirect pointers (48 KB, 4 MB, 4 GB, 4 TB with 4 KB blocks); modern filesystems use extents.
+*Common weak answer:* describing only one method. The question is about the trade-offs between them.
+
+**C3. What are RAID 0, 1, 5, 6 and 10? Is RAID a backup?**
+A strong answer must mention:
+- 0 stripes (fast, no redundancy); 1 mirrors; 5 stripes with rotating single parity (survives one failure, n − 1 capacity); 6 double parity (two failures); 10 stripes over mirrors.
+- Parity is XOR, so any one lost block can be recomputed from the others.
+- RAID 5's small-write penalty (read-modify-write, four I/Os) and its exposure during long rebuilds.
+- RAID is not a backup: deletions, bugs and ransomware are written to every disk.
+*Common weak answer:* "RAID 5 protects my data, so we don't need backups." It protects only against a disk failure.
+
+---
+
 ---
 
 ## Chapter Summary
@@ -1674,6 +1859,8 @@ A thread waiting for I/O can **block**, **poll** non-blocking FDs, or **multiple
 A TCP server calls `socket`, `bind`, `listen` and `accept`; the kernel completes handshakes itself and queues connections in the **SYN queue** and **accept queue**, so an overloaded or stuck server leaves clients connected but unanswered, with no trace in its own logs. **Buffering** reduces system calls but adds a place where a crash loses data; **zero-copy** (`sendfile`, `splice`) moves file data to sockets without visiting user space, unless TLS or transformation requires it. Processes on one machine can talk through pipes, Unix domain sockets, shared memory, message queues and signals, but services talk over the network because it works wherever the other side runs.
 
 **Rlimits** cap FDs and threads per process; "Too many open files" is `EMFILE`, and it is a different failure from pool or port exhaustion. **Containers** are ordinary processes, given private views of PIDs, networks, mounts and hostnames by **namespaces**, held to CPU quotas, memory limits and PID counts by **cgroups**, and run from layered **images**. They share the host kernel, which makes them light and fast to start and also less isolated than **VMs**, which run their own kernels on a hypervisor using hardware virtualisation. Finally, a well-run server in a container is the process that receives `SIGTERM`, keeps serving while load balancers catch up, drains, closes its pools, flushes and exits before the grace period ends.
+
+Section 4.13 adds the classic textbook topics. Disk scheduling (FCFS, SSTF, SCAN, LOOK and their circular forms) reduces seek time on HDDs at the risk of starvation. Files are allocated contiguously, as linked blocks, or through index blocks such as the inode's direct and indirect pointers, and free space is tracked with bitmaps or lists. RAID levels trade capacity for speed and for surviving disk failures, and never replace backups.
 
 ---
 
