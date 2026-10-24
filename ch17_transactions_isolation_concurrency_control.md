@@ -357,7 +357,7 @@ Full serialisability costs concurrency: some transactions must wait or be aborte
 | Write skew | Possible | Possible | Possible | Prevented | Possible | **Possible** | Prevented | Possible | Possible | **Possible** ⁶ | Prevented |
 
 1. For plain (consistent) `SELECT`s, which read the transaction's snapshot. A locking read (`FOR UPDATE`) or an `UPDATE` in the same transaction sees the latest committed version instead, so mixing the two can show different values.
-2. In practice: PostgreSQL's Repeatable Read reads from one snapshot, so rows committed by others after it began never appear (accuracy rule 4: no phantoms in practice; write skew still possible).
+2. In practice: PostgreSQL's Repeatable Read reads from one snapshot, so rows committed by others after it began never appear (no phantoms in practice, although write skew is still possible).
 3. Plain `SELECT`s see a fixed snapshot; locking reads and `UPDATE`/`DELETE` lock the scanned ranges with next-key locks, which blocks other transactions from inserting into them.
 4. The standard's three-phenomenon definitions do not address these anomalies directly; implementations differ.
 5. The second writer's `UPDATE` of a row changed after its snapshot fails with `could not serialize access due to concurrent update`; the application must retry.

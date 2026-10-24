@@ -492,7 +492,7 @@ The rolling-deploy and autoscaling rows show why the budget must be set for the 
 
 ### Mechanism: why the queue belongs in the application
 
-With a pool of 4 and 200 worker threads, most threads wait in the pool's queue during a burst. That is correct. A thread waiting in the application costs a parked thread (or a parked virtual thread, which costs even less; Chapter 5, Section 5.13). A query waiting inside the database costs a running backend process, a snapshot that holds back VACUUM, and contention on shared structures. Queueing at the cheaper place, with a short acquisition timeout as a release valve, is the design. Virtual threads make it tempting to remove the limit, but they reduce the cost of waiting, not the database's capacity (the system prompt's rule 14; Chapter 5, Section 5.13).
+With a pool of 4 and 200 worker threads, most threads wait in the pool's queue during a burst. That is correct. A thread waiting in the application costs a parked thread (or a parked virtual thread, which costs even less; Chapter 5, Section 5.13). A query waiting inside the database costs a running backend process, a snapshot that holds back VACUUM, and contention on shared structures. Queueing at the cheaper place, with a short acquisition timeout as a release valve, is the design. Virtual threads make it tempting to remove the limit, but they reduce the cost of waiting, not the database's capacity (Chapter 5, Section 5.13).
 
 ### Guarantees and non-guarantees
 
