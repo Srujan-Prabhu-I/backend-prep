@@ -1,0 +1,504 @@
+# Interview Question Bank
+
+Each chapter's Interview Drill questions are collected here once the chapter passes review. Chapter 27's readiness checklist is drawn from this file.
+
+Format: `- [Ch N] Question`.
+
+Questions only. The strong-answer bullets are in each chapter's Interview Drill.
+
+- [Ch 1] What is the client–server model, and why don't we run everything on the client?
+- [Ch 1] Why isn't client-side validation sufficient?
+- [Ch 1] What is an API? What are serialization and deserialization, and why are they needed?
+- [Ch 1] Distinguish a load balancer, a reverse proxy, an application server process and application code.
+- [Ch 1] Why shouldn't important data live in the application process's memory?
+- [Ch 1] How is a call to another service different from a function call in the same process?
+- [Ch 1] What does "client and server are roles, not machines" mean? Give an example.
+- [Ch 1] What is the difference between logical architecture and physical deployment? Why does it matter?
+- [Ch 1] What is the basic trade-off between a monolith and microservices?
+- [Ch 1] At a high level, what happens when a user clicks "Buy"?
+- [Ch 1] What is a trust boundary?
+- [Ch 1] Why does a cache appear in so many architectures, and what is its cost?
+- [Ch 2] What happens at the hardware level when a program runs?
+- [Ch 2] What is the memory hierarchy, and why does it exist?
+- [Ch 2] Why is RAM slower than CPU cache, roughly how much slower, and why do latency numbers matter for design?
+- [Ch 2] What is a cache line, and what is false sharing?
+- [Ch 2] HDD vs SSD: how does each work, and how does that affect random vs sequential I/O?
+- [Ch 2] Compiled vs interpreted vs JIT?
+- [Ch 2] Stack vs heap?
+- [Ch 2] What is a stack overflow? Give a backend example.
+- [Ch 2] How does a tracing garbage collector work?
+- [Ch 2] What is the generational hypothesis, and how do collectors exploit it?
+- [Ch 2] How can GC affect a web service's latency? How would you tell?
+- [Ch 2] Reference counting vs tracing GC?
+- [Ch 2] Can a garbage-collected program leak memory?
+- [Ch 2] Why does a process use more memory than its heap? Why does that matter in containers?
+- [Ch 2] What is the GIL, and how do Python web servers deal with it?
+- [Ch 2] Why is Node.js called single-threaded, and what's the consequence for a backend?
+- [Ch 3] What is the difference between a process and a thread?
+- [Ch 3] What is a system call, and why is it more expensive than a function call?
+- [Ch 3] What is the difference between user mode and kernel mode?
+- [Ch 3] What are the states of a process, and what causes each transition?
+- [Ch 3] How do fork and exec work? What is copy-on-write?
+- [Ch 3] What is a zombie process? What is an orphan? How is each cleaned up?
+- [Ch 3] What is the difference between SIGTERM and SIGKILL? How does a server shut down gracefully?
+- [Ch 3] What is the difference between user-level and kernel-level threads? What is M:N threading?
+- [Ch 3] Explain FCFS, SJF, Round Robin and MLFQ. What is starvation, and how does aging fix it?
+- [Ch 3] Given jobs A(0, 7), B(1, 4), C(2, 1), D(3, 4) as (arrival, burst), compute the average waiting time under FCFS and SRTF.
+- [Ch 3] What happens during a context switch, and why is it expensive?
+- [Ch 3] How does virtual memory work?
+- [Ch 3] What is a page table? Why are page tables multi-level? What is the TLB?
+- [Ch 3] What is a page fault? Minor versus major?
+- [Ch 3] Compare FIFO, LRU and Optimal page replacement. What is Belady's anomaly?
+- [Ch 3] What is thrashing, and how do you detect it?
+- [Ch 3] A process with a 2 GB heap uses 3 GB of RSS. Why?
+- [Ch 3] A process disappeared with no error in its logs. What happened, and how do you prove it?
+- [Ch 3] (placement) What is the difference between multiprogramming, multitasking and multiprocessing?
+- [Ch 3] (placement) What happens when you switch on a computer?
+- [Ch 3] (placement) Compare first fit, best fit and worst fit. What is the difference between internal and external fragmentation?
+- [Ch 4] What is a file descriptor? What happens to file descriptors across `fork`?
+- [Ch 4] What is an inode? What is the difference between a hard link and a symbolic link?
+- [Ch 4] What does a journaling filesystem protect against, and what does it not protect against?
+- [Ch 4] What is the page cache? Why does Linux show almost no free memory?
+- [Ch 4] What does it mean when `write()` returns? Why does `fsync` matter?
+- [Ch 4] What is `O_DIRECT`, and does it make a write durable?
+- [Ch 4] What is the difference between blocking, non-blocking and asynchronous I/O?
+- [Ch 4] How does `epoll` work, and why does it scale better than `select` and `poll`?
+- [Ch 4] Level-triggered versus edge-triggered: what is the difference, and what goes wrong with edge-triggered if you are careless?
+- [Ch 4] What is the C10K problem, and how was it solved?
+- [Ch 4] Walk through the system calls a TCP server makes. What is the listen backlog?
+- [Ch 4] What is zero-copy? How does `sendfile` work?
+- [Ch 4] What IPC mechanisms exist, and when would you use each?
+- [Ch 4] What causes "Too many open files", and how do you diagnose it?
+- [Ch 4] What is the difference between a virtual machine and a container? What are namespaces and cgroups?
+- [Ch 4] Why is a container less isolated than a virtual machine?
+- [Ch 4] Why might a containerised application ignore `SIGTERM`, and how do you fix it?
+- [Ch 4] What happens when a container exceeds its memory limit? Its CPU limit?
+- [Ch 4] (placement) Compare the disk scheduling algorithms FCFS, SSTF, SCAN, LOOK and C-SCAN.
+- [Ch 4] (placement) Explain contiguous, linked and indexed file allocation. How does a Unix inode find a file's blocks?
+- [Ch 4] (placement) What are RAID 0, 1, 5, 6 and 10? Is RAID a backup?
+- [Ch 5] What is the difference between concurrency and parallelism?
+- [Ch 5] What is a race condition, and how do you prevent one?
+- [Ch 5] What is a critical section, and what must a solution to the critical-section problem guarantee?
+- [Ch 5] What is a memory model? What is a visibility problem?
+- [Ch 5] What is happens-before?
+- [Ch 5] What does `volatile` do in Java, and what doesn't it do?
+- [Ch 5] What is compare-and-swap, and what does lock-free mean?
+- [Ch 5] What is the ABA problem?
+- [Ch 5] What is the difference between a mutex and a semaphore? Between a mutex and a spinlock?
+- [Ch 5] What is a condition variable, and why must you wait in a `while` loop?
+- [Ch 5] How do you solve the producer–consumer problem?
+- [Ch 5] What are the four conditions for deadlock? How do you prevent, avoid and detect deadlock?
+- [Ch 5] What is the difference between deadlock, livelock and starvation? What is priority inversion?
+- [Ch 5] How do you size a thread pool?
+- [Ch 5] What is the difference between async/await and threads? How does an event loop work?
+- [Ch 5] Compare OS threads, green threads, coroutines, virtual threads and goroutines.
+- [Ch 5] What is the GIL, and what are its consequences?
+- [Ch 5] How do you diagnose a hung or slow concurrent service?
+- [Ch 6] What happens at each layer when an application sends a message? How do the TCP/IP and OSI models relate?
+- [Ch 6] Why do we need both MAC and IP addresses? How does ARP work, and what happens to each address at a router?
+- [Ch 6] A host is configured as `10.0.5.25/22` with gateway `10.0.4.1`. How does it send to `10.0.6.100`, and to `10.0.12.50`?
+- [Ch 6] How does `traceroute` work, and what is a Path MTU black hole?
+- [Ch 6] How does a newly booted machine get an IP address? Why four messages?
+- [Ch 6] What is NAT, and how do hundreds of private servers share one public IP address?
+- [Ch 6] Compare stateless and stateful firewalls, and reject with drop.
+- [Ch 6] Walk through a DNS lookup of `api.example.com`. What is the difference between a recursive resolver and an authoritative server? Why is "DNS propagation" misleading?
+- [Ch 6] How can one server on port 443 hold 50,000 connections? Can one client open 50,000 connections to one database?
+- [Ch 6] Explain the three-way handshake with sequence numbers. Why three messages, and why random initial numbers?
+- [Ch 6] Walk through the close. What are `TIME_WAIT` and `CLOSE_WAIT`, and why does `TIME_WAIT` last 2 × MSL?
+- [Ch 6] What is the difference between flow control and congestion control? How do slow start and congestion avoidance work?
+- [Ch 6] What does TCP not guarantee? Why can't it give message boundaries or exactly-once payments?
+- [Ch 6] Compare TCP and UDP. What is head-of-line blocking, and how does QUIC address it?
+- [Ch 6] What is ephemeral port exhaustion? Do the arithmetic and give the fix.
+- [Ch 6] Why might a 1 Gb/s link with an 80 ms RTT carry only a few Mb/s on one TCP connection, and why does 1% loss hurt so much?
+- [Ch 6] What is the difference between L4 and L7 load balancing, and why does L4 break gRPC load distribution?
+- [Ch 6] Why does one connection attempt fail instantly with "connection refused" and another hang until a connect timeout? What do a read timeout and a reset mean?
+- [Ch 6] (placement) What is the difference between a hub, a switch and a router? What are collision and broadcast domains?
+- [Ch 6] (placement) What were IP address classes, why were they replaced by CIDR, and how do you split a /24 into four subnets?
+- [Ch 6] (placement) How do parity, checksums and CRCs detect errors? What does a Hamming code add?
+- [Ch 6] (placement) Compare stop-and-wait, Go-Back-N and selective repeat. Which one is TCP?
+- [Ch 6] (placement) How do CSMA/CD and CSMA/CA work, and why does Wi-Fi need the second?
+- [Ch 6] (placement) Distance vector versus link state routing? What is count to infinity, and what does BGP do?
+- [Ch 6] (placement) Circuit switching versus packet switching, and unicast versus broadcast, multicast and anycast?
+- [Ch 7] Describe an HTTP/1.1 request and response on the wire. How does the receiver find the end of the headers and of the body?
+- [Ch 7] What is the difference between `Content-Length` and chunked encoding, and how does request smuggling work?
+- [Ch 7] What is the difference between safe and idempotent methods? Why is `DELETE` idempotent if the second call returns `404`?
+- [Ch 7] What are the differences between `PUT`, `PATCH` and `POST`?
+- [Ch 7] What is the difference between `401` and `403`? When would you return `404` instead of `403`?
+- [Ch 7] Distinguish `400` and `422`, and `500`, `502`, `503`, `504`.
+- [Ch 7] What does a `200 OK`, or a timeout, tell you about whether the server's transaction committed?
+- [Ch 7] How do `301`, `302`, `303`, `307` and `308` differ for a `POST`?
+- [Ch 7] What does keep-alive do? Why does an idle keep-alive connection not need a thread on a modern server?
+- [Ch 7] Compare HTTP/1.1, HTTP/2 and HTTP/3. Why does HTTP/2 still suffer from head-of-line blocking?
+- [Ch 7] How does HTTP caching work, and what is the difference between `no-cache` and `no-store`?
+- [Ch 7] How do you stop two clients from overwriting each other's changes over stateless HTTP?
+- [Ch 7] A `POST /payments` times out. Why is retrying dangerous, and how do you make it safe?
+- [Ch 7] Why must `GET` never change state? Give a concrete failure.
+- [Ch 7] What is the difference between `Content-Encoding` and `Transfer-Encoding`, and why does `Vary` matter for compression?
+- [Ch 7] A client's `Content-Length` is set from a string's length, and some requests hang or corrupt the next request. Why?
+- [Ch 7] A team keeps a shopping cart in each instance's memory behind a load balancer. What goes wrong, and what does it have to do with HTTP being stateless?
+- [Ch 8] What is the difference between encoding, hashing and encryption? Is Base64 encryption?
+- [Ch 8] What is the difference between symmetric and asymmetric cryptography? Why doesn't TLS encrypt everything with RSA?
+- [Ch 8] Why is ECB insecure? What is AEAD, and why must a nonce never be reused?
+- [Ch 8] What properties does a cryptographic hash have, and why is SHA-256 wrong for passwords?
+- [Ch 8] What is a MAC or HMAC, and how does it differ from a digital signature?
+- [Ch 8] How do two parties agree on a secret key over a network an attacker records?
+- [Ch 8] What is forward secrecy?
+- [Ch 8] What is in a certificate, why are there intermediate CAs, and how does a client validate a certificate?
+- [Ch 8] Walk through the TLS 1.3 handshake. How is it faster than TLS 1.2, and what is the risk of 0-RTT?
+- [Ch 8] What are SNI and ALPN, and what breaks without them?
+- [Ch 8] Compare terminating TLS at a load balancer, re-encryption, passthrough and mutual TLS.
+- [Ch 8] Why does an HTTP-to-HTTPS redirect still leave the first request exposed, and how does HSTS fix it?
+- [Ch 8] Why does a browser accept a certificate that your backend client rejects with "unable to get local issuer certificate"?
+- [Ch 8] What does HTTPS not protect against?
+- [Ch 8] How would you verify a webhook from a payment provider?
+- [Ch 8] How would you encrypt a sensitive column in a database?
+- [Ch 8] Why do certificate-expiry outages keep happening, and how do you prevent them?
+- [Ch 9] What happens when you type a URL into the browser and press Enter?
+- [Ch 9] How does the browser render a page? What blocks rendering, and what do `async` and `defer` do?
+- [Ch 9] Where should a web application store an access token?
+- [Ch 9] What do `Secure`, `HttpOnly` and `SameSite` do?
+- [Ch 9] What is the same-origin policy? What does it restrict, and what does it not?
+- [Ch 9] How does CORS work? What is a preflight, and when is one sent?
+- [Ch 9] Why is CORS not a server-side access control?
+- [Ch 9] What is XSS? How do you prevent stored, reflected and DOM-based XSS?
+- [Ch 9] What does a Content Security Policy do?
+- [Ch 9] What is clickjacking, and how do you prevent it?
+- [Ch 9] What do SSR, CSR and SSG change for the backend?
+- [Ch 9] A front-end developer reports a "CORS error". How do you find out what is actually wrong?
+- [Ch 9] What does `X-Content-Type-Options: nosniff` protect against?
+- [Ch 9] Why are API subdomains the same site but not the same origin, and why does it matter?
+- [Ch 10] What is a CDN, and what does it do for a backend?
+- [Ch 10] Forward versus reverse proxy? What does a reverse proxy do?
+- [Ch 10] What is the difference between L4 and L7 load balancing?
+- [Ch 10] Which load-balancing algorithms do you know, and when does each fail?
+- [Ch 10] What are health checks? Active versus passive, liveness versus readiness?
+- [Ch 10] What are sticky sessions, and what do they cost?
+- [Ch 10] API gateway versus load balancer versus service mesh?
+- [Ch 10] What happens between `accept()` and your handler?
+- [Ch 10] What is middleware? Explain the filter chain.
+- [Ch 10] Compare thread-per-request, worker-process and event-loop servers.
+- [Ch 10] Who produces a 502, a 503 and a 504?
+- [Ch 10] How do WebSockets work? How do they compare with SSE and long polling?
+- [Ch 10] How should timeouts be set across the hops of a request?
+- [Ch 10] How does a server behind proxies learn the client's real IP, and how can that go wrong?
+- [Ch 10] Why should response buffering be turned off for some routes?
+- [Ch 10] What does a 504 tell you about whether the request succeeded?
+- [Ch 11] How many requests can a server handle concurrently?
+- [Ch 11] What is Little's Law, and how do you use it to size a pool?
+- [Ch 11] A downstream slows from 50 ms to 2 s. What happens?
+- [Ch 11] Why can adding threads make a service slower?
+- [Ch 11] Thread-per-request versus event loop versus virtual threads: what does each do with a blocking call?
+- [Ch 11] Why is shared mutable state in a singleton service a bug, and how do you fix it?
+- [Ch 11] How do you pass request context through thread pools and async code?
+- [Ch 11] Why does a lock in your code not stop two instances processing the same order?
+- [Ch 11] What happens to latency as load approaches capacity?
+- [Ch 11] What is backpressure? What are bounded queues, admission control and load shedding?
+- [Ch 11] What is a metastable failure, and how do retry storms cause one?
+- [Ch 11] Is reactive programming faster? When is it worth it?
+- [Ch 11] How do you tell CPU saturation from lock contention, and both from a slow downstream?
+- [Ch 11] Why do unbounded queues hide overload?
+- [Ch 11] Why is holding a database connection across an HTTP call dangerous?
+- [Ch 11] How should pools be sized across many instances?
+- [Ch 12] What is dependency injection, and why use it?
+- [Ch 12] What is inversion of control? How does it differ from dependency injection and from the Dependency Inversion Principle?
+- [Ch 12] What do the controller, service and repository layers each do? Where do transactions and validation belong?
+- [Ch 12] What is the difference between an entity, a value object and a DTO? Why not return database entities from your API?
+- [Ch 12] What are singleton, prototype and request scopes? What goes wrong when you mix them?
+- [Ch 12] You are asked to build a minimal DI container. What does `resolve` do?
+- [Ch 12] How does a framework add transactions, security checks or caching to a method that never calls them?
+- [Ch 12] Why does `@Transactional` (or `@Cacheable`, or `@Async`) sometimes have no effect?
+- [Ch 12] Walk through what happens to a JSON request body, from bytes to a database row and back.
+- [Ch 12] What is insecure deserialisation, and how do you prevent it?
+- [Ch 12] Should a JSON mapper reject unknown fields or ignore them?
+- [Ch 12] Exceptions or result types? How should errors become HTTP responses?
+- [Ch 12] A developer catches an exception inside a transactional service method, logs it and continues. What can go wrong?
+- [Ch 12] How should configuration and secrets reach an application?
+- [Ch 12] Layered versus hexagonal architecture: what problem does hexagonal solve, and what does it cost?
+- [Ch 12] Monolith versus microservices: what are the trade-offs? What are a modular monolith and a distributed monolith?
+- [Ch 12] Why is a database shared between services a problem?
+- [Ch 12] What is the difference between a unit test and an integration test, and how does architecture affect testability?
+- [Ch 12] Why is constructor injection preferred over field injection?
+- [Ch 12] (placement) State the SOLID principles, with an example of a violation for each.
+- [Ch 12] (placement) Write a thread-safe Singleton. Why do many backend codebases avoid the pattern?
+- [Ch 12] (placement) Proxy, Decorator, Adapter, Facade: what is the difference?
+- [Ch 12] (placement) Rank the types of cohesion and coupling. Which do you want?
+
+- [Ch 13] What is an API contract, and what counts as a breaking change?
+- [Ch 13] What makes an API RESTful? Is HATEOAS used in practice?
+- [Ch 13] Design the API for orders and payments.
+- [Ch 13] PUT versus PATCH: how do you design partial updates, and which status codes do you return?
+- [Ch 13] How do idempotency keys work, including two retries at once?
+- [Ch 13] How do you design pagination? Why is offset slow?
+- [Ch 13] Two users edit the same resource at once. How does the API prevent lost updates?
+- [Ch 13] How do you handle errors consistently across an API?
+- [Ch 13] How do you version an API, and how do you deprecate a version?
+- [Ch 13] How do you expose a ten-minute operation, and how do you make webhooks reliable?
+- [Ch 13] How do Protocol Buffers and Avro handle schema evolution?
+- [Ch 13] REST versus gRPC versus GraphQL: how do they differ, and when would you choose each?
+- [Ch 13] What is the N+1 problem in GraphQL, and how is it solved?
+- [Ch 13] Where do authentication, authorisation and rate limiting belong in an API?
+- [Ch 13] What is SSRF, and how do you defend a feature that fetches user-supplied URLs?
+- [Ch 13] Why can a timeout on a POST not simply be retried, and what makes it safe?
+- [Ch 13] (placement) REST versus SOAP: what is the difference, and when would you still use SOAP?
+- [Ch 13] (placement) What is WSDL, and what is its equivalent in modern APIs?
+- [Ch 14] What is persistence? What is a database? What is a DBMS, and why use one instead of files? What is the relational model, and why did it win?
+- [Ch 14] What are super, candidate, primary, alternate and foreign keys? Surrogate or natural?
+- [Ch 14] What constraints exist, and when are they checked?
+- [Ch 14] How do you model a many-to-many relationship?
+- [Ch 14] What is normalisation? Explain 1NF, 2NF, 3NF and BCNF with an example.
+- [Ch 14] When would you denormalise, and what does it cost?
+- [Ch 14] In what order is a `SELECT` evaluated? Why can't `WHERE` use a column alias?
+- [Ch 14] What is the difference between `WHERE` and `HAVING`?
+- [Ch 14] What types of joins are there? Left join versus anti-join?
+- [Ch 14] Correlated versus uncorrelated subqueries? What are CTEs and recursive CTEs?
+- [Ch 14] What are window functions? `ROW_NUMBER` versus `RANK` versus `DENSE_RANK`?
+- [Ch 14] How does `NULL` behave?
+- [Ch 14] `UNION` versus `UNION ALL`; `DELETE` versus `TRUNCATE` versus `DROP`; what is an upsert?
+- [Ch 14] Why must money not be stored as a float? How should timestamps be stored?
+- [Ch 14] Find the second highest salary. What goes wrong with the obvious answer?
+- [Ch 14] How do you find duplicates and keep only one?
+- [Ch 14] How do you find gaps in a sequence, and streaks of consecutive days?
+- [Ch 14] Top N per group and running totals: how?
+- [Ch 14] (placement) Given R(A, B, C, D, E) and F = {A → B, B → C, CD → E, E → A}, find all candidate keys. Is R in 3NF? In BCNF?
+- [Ch 14] (placement) When is a decomposition lossless? Show a lossy one.
+- [Ch 14] (placement) Why might a designer stop at 3NF instead of BCNF?
+- [Ch 14] (placement) Express "students enrolled in all required courses" in relational algebra and SQL.
+- [Ch 14] (placement) What are specialisation, generalisation and aggregation in the EER model, and how do you map a specialisation to tables?
+- [Ch 14] (placement) How does relational calculus differ from relational algebra? Name the integrity constraint categories.
+- [Ch 15] How does a database store rows on disk?
+- [Ch 15] Why does PostgreSQL use a process per connection, and what does it cost?
+- [Ch 15] What is the buffer pool, and how does it evict pages?
+- [Ch 15] What is WAL, and why is it faster than writing pages at commit?
+- [Ch 15] Walk through crash recovery.
+- [Ch 15] What does a checkpoint do? What if checkpoints are too frequent or too rare?
+- [Ch 15] How do PostgreSQL and InnoDB roll back a transaction?
+- [Ch 15] B-tree versus LSM-tree storage: how do they differ, and when would you choose each?
+- [Ch 15] What are write, read and space amplification? What is a bloom filter for?
+- [Ch 15] Row stores versus column stores: why is a column store faster for analytics?
+- [Ch 15] How can an in-memory database be durable?
+- [Ch 15] Logical versus physical backups; how does point-in-time recovery work; what are RPO and RTO?
+- [Ch 15] Why is a replica not a backup?
+- [Ch 15] Why does commit latency depend on the storage device?
+- [Ch 15] What is a torn page, and how do databases protect against it?
+- [Ch 15] Why does an update in PostgreSQL create a new row version, and what does that cost?
+- [Ch 15] (placement) Deferred versus immediate database modification: what does recovery need in each?
+- [Ch 15] (placement) Given a log ending in a crash, which transactions are redone and which undone?
+- [Ch 15] (placement) What is shadow paging, and why is it rarely used by databases?
+- [Ch 16] How does a B+tree index work? Why not a binary tree or a hash table?
+- [Ch 16] How many levels does an index on a billion rows have?
+- [Ch 16] Why not index every column?
+- [Ch 16] Clustered versus non-clustered (secondary) indexes? What happens on a secondary-index lookup in InnoDB and in PostgreSQL?
+- [Ch 16] How should you order the columns of a composite index?
+- [Ch 16] What is a covering index? What is an index-only scan?
+- [Ch 16] What are partial and expression indexes for?
+- [Ch 16] When would you use GIN, GiST, BRIN or hash indexes?
+- [Ch 16] How does the query planner choose a plan? What are selectivity and cardinality?
+- [Ch 16] Why did a query suddenly become slow without any code change?
+- [Ch 16] Nested-loop versus hash versus merge join: when does each win?
+- [Ch 16] How do you read `EXPLAIN` and `EXPLAIN ANALYZE`?
+- [Ch 16] Why does `WHERE lower(email) = …` or `LIKE '%term'` not use an index?
+- [Ch 16] What is table partitioning, and what is partition pruning?
+- [Ch 16] Why do random UUID primary keys hurt insert performance on large tables?
+- [Ch 16] A query filters 30% of a large table. Why might the planner ignore your index, and is it right?
+- [Ch 16] (placement) Compute the block accesses to find a record by key with no index, with a sparse primary index, and with a multilevel index, for r = 30,000, R = 100 bytes, B = 1,024 bytes, V = 9, P = 6.
+- [Ch 16] (placement) Differences between a B-tree and a B+tree? Why do databases use B+trees?
+- [Ch 16] (placement) Insert a given sequence into a B+tree of given order and draw the result.
+- [Ch 16] (placement) Explain extendible hashing with an example.
+- [Ch 16] (placement) How does external merge sort work, and what does it cost for b_r = 10,000 blocks and M = 101 buffers?
+- [Ch 1] What is the backend, and how does it differ from the frontend?
+- [Ch 6] What is a computer network? What is the Internet? How do a LAN and a WAN differ?
+- [Ch 7] What is the difference between the Internet and the World Wide Web?
+- [Ch 17] What is a transaction? What do commit, rollback, autocommit and savepoints do?
+- [Ch 17] Explain ACID precisely. What implements each property?
+- [Ch 17] What are a dirty read, a non-repeatable read and a phantom?
+- [Ch 17] What are a lost update, read skew and write skew? Give a write-skew example.
+- [Ch 17] What are the isolation levels, and what does each prevent? What do PostgreSQL and MySQL actually do?
+- [Ch 17] What is two-phase locking? What are shared, exclusive and intention locks?
+- [Ch 17] How does MVCC work? How do PostgreSQL and InnoDB differ?
+- [Ch 17] What is VACUUM, and what is transaction ID wraparound?
+- [Ch 17] What is serialisable snapshot isolation, and why must applications retry?
+- [Ch 17] What do `SELECT … FOR UPDATE` and `SKIP LOCKED` do? How would you build a job queue in a database?
+- [Ch 17] Optimistic versus pessimistic locking: how do they work, and when would you use each?
+- [Ch 17] How do database deadlocks happen, and how are they detected and prevented?
+- [Ch 17] How do you prevent two customers from buying the last item?
+- [Ch 17] Why are long-running transactions dangerous?
+- [Ch 17] Why is `UPDATE … SET stock = stock - 1 WHERE stock >= 1` safe at Read Committed?
+- [Ch 17] When would you use a constraint instead of an isolation level to protect an invariant?
+- [Ch 17] (placement) Is the schedule r1(A) r2(A) w1(A) w2(A) c1 c2 conflict serialisable? Draw its precedence graph.
+- [Ch 17] (placement) Define recoverable, cascadeless and strict schedules, and give a non-recoverable example.
+- [Ch 17] (placement) Compare basic, conservative, strict and rigorous 2PL.
+- [Ch 17] (placement) Explain the timestamp-ordering protocol and Thomas's write rule.
+- [Ch 17] (placement) Draw the transaction state diagram. Compare wait-die and wound-wait.
+- [Ch 18] What does a database driver do? What happens when an application connects to PostgreSQL?
+- [Ch 18] Why is opening a database connection expensive, and why does PostgreSQL in particular need pooling?
+- [Ch 18] How does a connection pool work?
+- [Ch 18] How do you size a connection pool?
+- [Ch 18] What is PgBouncer, and what do session, transaction and statement pooling mean? What breaks in transaction mode?
+- [Ch 18] What is a prepared statement, and what does the database reuse?
+- [Ch 18] What is SQL injection, and why do prepared statements prevent it?
+- [Ch 18] Can you inject through ORDER BY or LIKE? What is second-order injection?
+- [Ch 18] What is an ORM, and what is the object–relational impedance mismatch?
+- [Ch 18] How does an ORM track changes? Explain the identity map, unit of work, dirty checking and flushing.
+- [Ch 18] What is lazy loading, how is it implemented, and what is a LazyInitializationException?
+- [Ch 18] What is the N+1 problem? How do you detect and fix it?
+- [Ch 18] Where should transaction boundaries go?
+- [Ch 18] Why should you never call a remote service inside a database transaction?
+- [Ch 18] What do propagation settings do? Why can REQUIRES_NEW deadlock a pool, and why does @Transactional sometimes do nothing?
+- [Ch 18] How do you prevent lost updates when using an ORM?
+- [Ch 18] How do you insert a million rows efficiently, and how do you read a table that does not fit in memory?
+- [Ch 18] How do you rename a column with zero downtime, and why can a one-line ALTER TABLE take a site down?
+- [Ch 18] What is read/write splitting, and what is the read-your-writes problem?
+- [Ch 18] (placement) What are the four types of JDBC drivers? Which one is used today and why?
+- [Ch 18] (placement) Compare Statement, PreparedStatement and CallableStatement.
+- [Ch 18] (placement) What is a cursor? Distinguish implicit and explicit cursors, and explain the lifecycle.
+- [Ch 18] (placement) What is embedded SQL? How do static and dynamic SQL differ?
+- [Ch 19] Why is HTTP stateless, and how do sessions add state on top of it?
+- [Ch 19] Where can session state live, and what are the trade-offs?
+- [Ch 19] What does each cookie attribute protect against?
+- [Ch 19] How does a server-side session work, from login to logout?
+- [Ch 19] How should a session ID be generated, and why does its entropy matter?
+- [Ch 19] What is the difference between an idle timeout and an absolute timeout?
+- [Ch 19] Sticky sessions versus a shared session store versus signed cookies: which would you choose, and why?
+- [Ch 19] What is session hijacking? What is session fixation, and how do you prevent it?
+- [Ch 19] What does "logout" actually do, and why is it hard with stateless cookies?
+- [Ch 19] What is CSRF, and why do cookies make it possible?
+- [Ch 19] How do you prevent CSRF? When is SameSite enough, and when is it not?
+- [Ch 19] Is an API that uses bearer tokens vulnerable to CSRF? What risk does it trade in?
+- [Ch 19] Server-side sessions versus tokens: what is the difference?
+- [Ch 19] Compare the synchronizer token pattern with the double-submit cookie. What is wrong with naive double-submit?
+- [Ch 19] What is login CSRF, and how do you prevent it?
+- [Ch 19] (placement) Name the session-tracking techniques and compare them.
+- [Ch 19] (placement) What is the difference between getSession() and getSession(false), and how do you end and rotate a session in a servlet?
+- [Ch 20] What is the difference between authentication and authorisation? What is identity federation?
+- [Ch 20] How should passwords be stored? Why is SHA-256 wrong?
+- [Ch 20] How do you defend login against brute force and credential stuffing without locking out real users?
+- [Ch 20] How should a password-reset flow work?
+- [Ch 20] How does TOTP work? How do passkeys work, and why do they resist phishing?
+- [Ch 20] What is a JWT? How is it validated, and what are its pitfalls?
+- [Ch 20] Sessions versus JWTs: what are the trade-offs?
+- [Ch 20] What are refresh tokens, and what is refresh-token rotation?
+- [Ch 20] Explain the OAuth 2.0 authorization code flow with PKCE.
+- [Ch 20] Why was the implicit flow abandoned?
+- [Ch 20] What is the difference between OAuth 2.0 and OpenID Connect? Between an ID token and an access token?
+- [Ch 20] RBAC versus ABAC versus ReBAC: when would you use each?
+- [Ch 20] What is IDOR (BOLA), and how do you prevent it?
+- [Ch 20] How do services authenticate to each other?
+- [Ch 20] How should secrets be managed?
+- [Ch 20] What is threat modelling? Walk through the OWASP Top 10.
+- [Ch 20] What is the CIA triad, and how do the mechanisms of this chapter map to it?
+- [Ch 20] (placement) Explain how Kerberos authenticates a user to a service.
+- [Ch 20] (placement) Compare DAC, MAC and RBAC. State the Bell–LaPadula and Biba rules.
+- [Ch 21] What is a cache, and why does caching work? How do you compute its benefit?
+- [Ch 21] Where can you cache on a request path, and what does each layer cost?
+- [Ch 21] Cache-aside versus read-through versus write-through versus write-behind?
+- [Ch 21] How would you implement an LRU cache with O(1) operations?
+- [Ch 21] LRU versus LFU? How does Redis approximate LRU?
+- [Ch 21] How do you invalidate a cache?
+- [Ch 21] How do you keep a cache consistent with the database? What race makes it stale?
+- [Ch 21] What is a cache stampede, and how do you prevent it?
+- [Ch 21] What are cache penetration and avalanche, and how do you prevent them?
+- [Ch 21] What do you do about a hot key?
+- [Ch 21] Why is Redis single-threaded, and why is it still fast?
+- [Ch 21] What happens to the database when the cache goes down?
+- [Ch 21] Can you use Redis for rate limiting, sessions and locks? What are the caveats?
+- [Ch 21] How do you size a cache?
+- [Ch 21] (placement) A 64 KB, 2-way set-associative cache with 32-byte lines serves 32-bit addresses. How many bits are tag, index and offset?
+- [Ch 21] (placement) Compute the AMAT for L1 hit 2 ns, L1 miss rate 10%, L2 hit 10 ns, L2 local miss rate 25%, memory 100 ns.
+- [Ch 21] (placement) Compare direct-mapped, fully associative and set-associative caches, and name the three Cs.
+- [Ch 22] Why replicate? Why is a replica not a backup?
+- [Ch 22] How does database replication work? Physical versus logical?
+- [Ch 22] Synchronous versus asynchronous replication: what are the trade-offs?
+- [Ch 22] What is replication lag, and which anomalies does it cause?
+- [Ch 22] How does failover work, and what can go wrong?
+- [Ch 22] What is split-brain, and how is it prevented?
+- [Ch 22] Leader–follower versus multi-leader versus leaderless?
+- [Ch 22] How are write conflicts resolved? What is a CRDT?
+- [Ch 22] How do quorums work? Does W + R > N guarantee strong consistency?
+- [Ch 22] What is linearizability? How does it differ from eventual consistency?
+- [Ch 22] What is causal consistency?
+- [Ch 22] Explain the CAP theorem properly. What does it not say?
+- [Ch 22] What is PACELC?
+- [Ch 22] What is change data capture?
+- [Ch 22] (placement) Explain horizontal, vertical and mixed fragmentation, and the correctness rules.
+- [Ch 22] (placement) What kinds of transparency should a distributed DBMS provide?
+- [Ch 23] Why and how do you shard a database? How do you choose a shard key?
+- [Ch 23] Range versus hash partitioning?
+- [Ch 23] What is consistent hashing, and why use virtual nodes?
+- [Ch 23] How do you handle hot keys, skew and rebalancing?
+- [Ch 23] How do you query across shards? Local versus global secondary indexes?
+- [Ch 23] Why are clocks unreliable? What are Lamport and vector clocks?
+- [Ch 23] What is consensus, and why is an algorithm such as Raft needed? Why majorities?
+- [Ch 23] How does Raft elect a leader and replicate its log?
+- [Ch 23] How do you build a correct distributed lock? What is a fencing token?
+- [Ch 23] How does two-phase commit work, and why does it block? Why do microservices avoid it?
+- [Ch 23] What are the main NoSQL data models? What is BASE?
+- [Ch 23] How do you choose between SQL and NoSQL? What is polyglot persistence?
+- [Ch 23] What is scalability? Vertical versus horizontal scaling, and where does sharding fit?
+- [Ch 23] (placement) Design a star schema for an online shop's sales and explain the grain.
+- [Ch 23] (placement) Name and explain the OLAP operations.
+- [Ch 23] (placement) Why does tolerating Byzantine faults need 3f + 1 nodes, while crash faults need 2f + 1?
+- [Ch 24] What kinds of failure must a distributed system handle? What is partial failure? How do reliability, resilience and fault tolerance differ?
+- [Ch 24] How do you set timeouts across a call chain?
+- [Ch 24] When is a retry safe?
+- [Ch 24] What are exponential backoff and jitter, and why do you need both?
+- [Ch 24] Why do retries at several layers amplify load? What is a retry budget?
+- [Ch 24] How does a circuit breaker work?
+- [Ch 24] What is a fallback, and when is it dangerous?
+- [Ch 24] What is a bulkhead? What is an adaptive concurrency limit?
+- [Ch 24] How do rate limiters work? Token bucket versus sliding window?
+- [Ch 24] How do you rate limit across many instances?
+- [Ch 24] What is load shedding, and how does it differ from rate limiting and backpressure?
+- [Ch 24] What is a cascading failure, and how do you stop one? What is a metastable failure?
+- [Ch 24] What is the difference between liveness and readiness? How does graceful shutdown work?
+- [Ch 24] How do you compute the availability of serial and parallel components? What does "four nines" mean?
+- [Ch 24] What is chaos engineering?
+- [Ch 24] (placement) Compute availability from MTTF and MTTR, and two ways to raise it.
+- [Ch 24] (placement) Compute the reliability of a TMR system, and explain when TMR is worse than a single module.
+- [Ch 25] When should work be asynchronous? What does it cost?
+- [Ch 25] How does a background job queue work? A database-backed queue versus a broker?
+- [Ch 25] Queue versus pub/sub versus log: what is the difference between RabbitMQ and Kafka?
+- [Ch 25] How does Kafka store and deliver messages? What are partitions, offsets and consumer groups?
+- [Ch 25] How does Kafka guarantee ordering, and how can retries break it?
+- [Ch 25] What do at-most-once, at-least-once and exactly-once delivery mean?
+- [Ch 25] How do you make a consumer idempotent?
+- [Ch 25] What is a poison message? How do retries and dead-letter queues work?
+- [Ch 25] What is the dual-write problem? What is the transactional outbox pattern?
+- [Ch 25] Outbox polling relay versus CDC: which and why?
+- [Ch 25] What is a saga? Choreography versus orchestration? What is a compensating action?
+- [Ch 25] What is the difference between an event and a command? How do you evolve event schemas?
+- [Ch 25] What are event sourcing and CQRS, and what do they cost?
+- [Ch 25] What is consumer lag, and how do you diagnose and fix it?
+- [Ch 25] (placement) Explain the JMS point-to-point and publish/subscribe domains, durable subscriptions and acknowledgement modes.
+- [Ch 25] (placement) What do MQTT's QoS levels guarantee, and why is QoS 2 not end-to-end exactly-once?
+- [Ch 26] What happens between merging a change and it running in production?
+- [Ch 26] Horizontal versus vertical scaling? Why must services be stateless to scale?
+- [Ch 26] How does autoscaling work, and why does it lag?
+- [Ch 26] What does a container orchestrator do? What are desired state, scheduling and service discovery?
+- [Ch 26] What is the difference between liveness and readiness probes, and what goes wrong with a bad liveness probe?
+- [Ch 26] What are resource requests and limits, and how do they relate to cgroups and CPU throttling?
+- [Ch 26] Rolling versus blue–green versus canary deployments?
+- [Ch 26] How do you deploy a database schema change without downtime?
+- [Ch 26] Logs versus metrics versus traces? How does distributed tracing work?
+- [Ch 26] What is metric cardinality, and why can a label take down your monitoring?
+- [Ch 26] Why use p99 and not averages? How are percentiles computed from histograms?
+- [Ch 26] What are the golden signals, and the RED and USE methods?
+- [Ch 26] What are SLIs, SLOs, SLAs and error budgets? How should you alert?
+- [Ch 26] How do you read a CPU flame graph?
+- [Ch 26] How do you debug a production latency spike, and how should an incident be run?
+- [Ch 26] What are operations, DevOps and SRE? What kinds of load test are there?
+- [Ch 26] (placement) Compare an IDS with an IPS, and signature-based with anomaly-based detection.
+- [Ch 26] (placement) Distinguish a virus, a worm and a trojan. What is a botnet used for?
+- [Ch 27] What happens when you type a URL into the browser and press Enter? (5-minute and 30-minute versions)
+- [Ch 27] Walk through what happens when a user places an order, from the click to the confirmation email.
+- [Ch 27] Where can a request fail on its way through a system, and what does each failure look like to the caller?
+- [Ch 27] How do you approach debugging a production problem you have never seen before?
+- [Ch 27] A service's p99 latency doubled. How do you tell GC pauses, N+1 queries and connection-pool exhaustion apart?
+- [Ch 27] How do you prevent two customers from buying the last item, and where exactly is the check made?
+- [Ch 27] Login works on your laptop but fails in production. What are the likely causes?
+- [Ch 27] A payment succeeded but the order shows as failed. How can that happen, and how do you design against it?
+- [Ch 27] How can one slow dependency take down a whole system, and how do you prevent it?
+- [Ch 27] Users see old data after a database failover. Why, and what do you do about it?
+- [Ch 27] Design a URL shortener.
+- [Ch 27] Design an order and payment system.
+- [Ch 27] How do the layers of a backend depend on each other?
+- [Ch 27] Which guarantees does each layer provide, and which must the application provide for itself?
