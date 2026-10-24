@@ -810,7 +810,7 @@ Every slow query is a planning decision you can inspect. Knowing the pipeline te
 
 The **optimiser** (query planner) chooses a physical plan for a query by enumerating candidate plans and picking the one with the lowest **estimated cost**.
 
-**Statistics** are summaries of each table's data, gathered by sampling: number of rows and pages, fraction of `NULL`s, number of distinct values, most common values and their frequencies, a histogram of value distribution, and the correlation between value order and physical row order.
+**Statistics** are summaries of each table's data, gathered by sampling: number of rows and pages, fraction of `NULL`s, number of distinct values, most common values and their frequencies, a histogram of value distribution (a summary of how the values spread across ranges, from which the planner estimates how many rows a condition such as `price < 10` matches), and the correlation between value order and physical row order.
 
 **Selectivity** is the fraction of rows that satisfy a condition: 1.0 for a condition every row meets, 0.00001 for a rare value. **Cardinality** (in a plan, "rows") is the number of rows an operator produces; the estimated cardinality is selectivity × input rows. **Cardinality estimation** is predicting these numbers before running the query.
 

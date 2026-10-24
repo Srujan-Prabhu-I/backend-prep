@@ -678,6 +678,8 @@ ORDER BY created_at DESC, id DESC
 LIMIT 20 OFFSET 40;
 ```
 
+Read it as: from the `orders` table, take this customer's rows (`WHERE`), sort them newest first (`ORDER BY ... DESC`), skip 40 (`OFFSET`) and return at most 20 (`LIMIT`). SQL itself is Chapter 14.
+
 **Failure 1: cost grows with depth.** `OFFSET 40` does not jump to row 41. The database must produce the first 60 rows in order and throw away 40. With an index on `(customer_id, created_at DESC, id DESC)` (Chapter 16 explains indexes), it walks 60 index entries. At page 5,001, `OFFSET 100000`, it walks 100,020 entries to return 20. The cost of a page is roughly proportional to its offset:
 
 ```text

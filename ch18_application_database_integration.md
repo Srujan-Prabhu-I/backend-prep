@@ -1240,7 +1240,7 @@ The signature: **the same statement text repeated many times in one request, wit
 N+1 problems hide in plain sight because each query is fast. Evidence comes from counting:
 
 - **Per-request query count.** Log or measure how many statements each request runs. Most ORMs can report it (Hibernate's statistics, SQLAlchemy event hooks, a JDBC proxy driver that counts statements). A list endpoint running hundreds of queries is a finding.
-- **Tracing.** Distributed traces (Chapter 26) show a request span with a long "comb" of identical, tiny database spans.
+- **Tracing.** Distributed traces (Chapter 26) record one request's path through every service, and each timed step in a trace is a **span**. They show a request span with a long "comb" of identical, tiny database spans.
 - **Database statistics.** In `pg_stat_statements`, a primary-key lookup with an enormous `calls` count and a tiny `mean_exec_time`, whose call rate is a multiple of the request rate of a list endpoint:
 
 ```sql

@@ -202,7 +202,7 @@ Browsers increasingly limit cookies in third-party contexts, mostly to stop cros
 - A server can opt a cookie into partitioned storage explicitly with the `Partitioned` attribute (the proposal known as CHIPS), which requires `Secure` and is usually combined with `SameSite=None`.
 - Policies differ between browsers and have changed repeatedly; treat any design that needs an unpartitioned third-party cookie as fragile.
 
-For a backend, this matters whenever the browser's address bar shows one site while your cookie belongs to another: a login widget embedded in a customer's page, a payment iframe, an API on a different registrable domain (`shop.com` calling `api.shop-services.net`), or single sign-on flows that rely on a hidden iframe. The robust designs keep the credential **first-party**: serve the API under the same site as the page (`api.shop.com`), or use redirects and tokens instead of embedded cookies (Chapter 20). Diagnosis Lab 2 is this failure.
+For a backend, this matters whenever the browser's address bar shows one site while your cookie belongs to another: a login widget embedded in a customer's page, a payment iframe, an API on a different registrable domain (`shop.com` calling `api.shop-services.net`), or single sign-on (one login shared by several applications; Chapter 20) flows that rely on a hidden iframe. The robust designs keep the credential **first-party**: serve the API under the same site as the page (`api.shop.com`), or use redirects and tokens instead of embedded cookies (Chapter 20). Diagnosis Lab 2 is this failure.
 
 ### Guarantees and non-guarantees
 

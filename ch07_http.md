@@ -589,7 +589,7 @@ The headers you meet in every service:
 - **`User-Agent`** identifies the client software. Useful in logs; never a security control, since clients can send anything.
 - **`Accept-*`** state the client's preferences (Section 7.8).
 - **`Content-Type`** states the media type of the body (Section 7.7). A server that receives a body should check it and answer `415` if it is not supported.
-- **`Authorization`** carries credentials. `Basic` sends `base64(user:password)`, which is an encoding, not encryption (Chapter 8), so it is only acceptable over HTTPS. `Bearer` sends a token (Chapter 20).
+- **`Authorization`** carries credentials. `Basic` sends `base64(user:password)`. **Base64** rewrites any bytes as text using 64 safe characters (letters, digits, `+` and `/`), making the data about a third longer. It is an encoding, not encryption (Chapter 8): anyone can reverse it, so it is only acceptable over HTTPS. `Bearer` sends a token (Chapter 20).
 - **Tracing and forwarding headers.** `traceparent` (W3C Trace Context) carries a trace identifier from service to service so that one request can be followed through many (Chapter 26). `X-Forwarded-For`, `X-Forwarded-Proto` and the standard `Forwarded` field carry the original client's address and scheme past proxies (Chapter 10).
 
 **Custom headers.** Applications may define their own fields. The old convention of an `X-` prefix is deprecated (RFC 6648) because successful experimental fields then needed renaming; choose a clear name instead (`Idempotency-Key`, Chapter 13).

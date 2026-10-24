@@ -86,9 +86,9 @@ Memory is split into two regions with different rules:
  low addresses   └──────────────────────────────────┘
 ```
 
-**Kernel space** is the memory and code of the kernel. **User space** is everything else: your application, its libraries, the language runtime, the database server, the shell. On Linux the kernel is mapped into the upper part of every process's address space, but the hardware refuses user-mode code that tries to read or write it. (Section 3.13 explains what an "address space" is and how the hardware enforces this; for now, take it as a fact.)
+**Kernel space** is the memory and code of the kernel. **User space** is everything else: your application, its libraries, the language runtime, the database server, the shell (the program that reads and runs the commands you type in a terminal, such as `bash`). On Linux the kernel is mapped into the upper part of every process's address space, but the hardware refuses user-mode code that tries to read or write it. (Section 3.13 explains what an "address space" is and how the hardware enforces this; for now, take it as a fact.)
 
-Linux is a **monolithic kernel**: the scheduler, memory manager, file systems, drivers and network stack all run together in kernel space. A **microkernel** design (for example, seL4 or QNX) keeps only a minimal core in kernel mode and runs drivers and file systems as user-space servers that communicate by messages. Monolithic kernels are faster (no message passing between subsystems); microkernels contain faults better (a crashing driver does not take down the kernel). Backends overwhelmingly run on Linux, so this book describes Linux behaviour unless it says otherwise.
+Linux, the operating system that runs most servers and containers, is a **monolithic kernel**: the scheduler, memory manager, file systems, drivers and network stack all run together in kernel space. A **microkernel** design (for example, seL4 or QNX) keeps only a minimal core in kernel mode and runs drivers and file systems as user-space servers that communicate by messages. Monolithic kernels are faster (no message passing between subsystems); microkernels contain faults better (a crashing driver does not take down the kernel). Backends overwhelmingly run on Linux, so this book describes Linux behaviour unless it says otherwise.
 
 ### Guarantees and non-guarantees
 
@@ -309,7 +309,7 @@ The kernel keeps one record per process describing everything it needs to manage
 | Saved CPU context | Program counter, stack pointer, general-purpose registers, flags, floating-point/SIMD state (saved when not running) | Resuming after a context switch (Section 3.11) |
 | Scheduling information | Priority, nice value, accumulated CPU time, which CPU it last ran on, run-queue links | The scheduler (Section 3.10) |
 | Memory management | Pointer to the page tables and the list of memory regions (the `maps` above) | Address translation (Section 3.14) |
-| Open files | Pointer to the file descriptor table | All I/O (Chapter 4) |
+| Open files | Pointer to the file descriptor table (a file descriptor is the small number a process uses to refer to one open file or connection) | All I/O (Chapter 4) |
 | Credentials | User ID, group IDs, capabilities | Permission checks |
 | Signals | Pending signals, blocked-signal mask, handler table | Signal delivery (Section 3.6) |
 | Accounting and limits | CPU time used, page fault counts, context-switch counts, resource limits | `top`, `ps`, limits (Chapter 4) |
@@ -638,7 +638,7 @@ main_loop:
  ─────── if still running when the platform's grace period expires: SIGKILL ───────
 ```
 
-Container orchestrators follow the same pattern: they send `SIGTERM`, wait for a grace period (30 seconds by default in Kubernetes at the time of writing), then send `SIGKILL`. If the application ignores `SIGTERM` (or runs as PID 1 without a handler, Section 3.5), it dies by `SIGKILL` with in-flight requests cut off. The full protocol, including how load balancers drain traffic, is in Chapter 24 (graceful shutdown) and Chapter 26 (deployments).
+Container orchestrators (systems such as Kubernetes that start, stop and restart containers across many machines; Chapter 26) follow the same pattern: they send `SIGTERM`, wait for a grace period (30 seconds by default in Kubernetes at the time of writing), then send `SIGKILL`. If the application ignores `SIGTERM` (or runs as PID 1 without a handler, Section 3.5), it dies by `SIGKILL` with in-flight requests cut off. The full protocol, including how load balancers drain traffic, is in Chapter 24 (graceful shutdown) and Chapter 26 (deployments).
 
 > **Java lens:** The JVM installs handlers for `SIGTERM`, `SIGINT` and `SIGHUP` and runs registered *shutdown hooks* when it receives them. A shutdown hook running is not the same as in-flight HTTP requests finishing. In Spring Boot, draining in-flight requests is configured separately (`server.shutdown=graceful`). The JVM also catches `SIGQUIT`: `kill -QUIT <pid>` prints the stacks of all its threads without stopping the process, a standard debugging tool.
 >

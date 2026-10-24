@@ -1069,7 +1069,7 @@ put(item):                              // producer
     while count == N:                   // full: wait for space
         wait(not_full, m)
     buffer[in] = item
-    in = (in + 1) mod N
+    in = (in + 1) mod N                 // mod: remainder after division, so N-1 wraps to 0
     count = count + 1
     signal(not_empty)                   // a consumer may now proceed
     unlock(m)
@@ -1101,7 +1101,7 @@ put(item):
     wait(empty_slots)                // 1. reserve a free slot (blocks if full)
     wait(mutex)                      // 2. then lock the buffer
     buffer[in] = item
-    in = (in + 1) mod N
+    in = (in + 1) mod N                 // mod: remainder after division, so N-1 wraps to 0
     signal(mutex)
     signal(full_slots)               // one more item available
 

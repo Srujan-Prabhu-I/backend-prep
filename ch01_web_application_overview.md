@@ -48,7 +48,7 @@ If phones are as powerful as older servers, why not run the whole application on
 
 - **Authoritative, shared state.** Millions of bank customers cannot each hold their own copy of the account balances. The system needs one authoritative source of truth that every user's actions modify.
 - **Security and trust.** You cannot trust an environment you do not control. If the logic "deduct $100 from this account" ran on the client, a malicious user could modify it to deduct $0. Critical operations must run behind a boundary the user cannot tamper with.
-- **Resource access.** The backend needs resources a client device must never hold: database credentials, third-party API keys, other users' data, and computing capacity beyond a single device.
+- **Resource access.** The backend needs resources a client device must never hold: database credentials, third-party API keys (secret strings that identify your company to another company's service), other users' data, and computing capacity beyond a single device.
 
 ### A Server Is a Program, Not a Machine
 
@@ -87,17 +87,19 @@ Two consequences matter immediately:
 - **"Client" and "server" are roles, not machines.** When your backend receives a request from a browser, it is a server. When it then queries a database or calls a payment provider, *it* is the client in a new request–response cycle. A single request from a user often fans out into many such cycles behind the scenes.
 - **The client cannot see what happened in step 2.** If the response never arrives, the client cannot know whether the server did nothing, did half the work, or did everything and the response was lost. This "unknown outcome" problem drives much of the reliability engineering in Chapters 7, 13 and 24.
 
+> **Try it.** You can watch a real request and response now. Open a terminal and run `curl -v https://example.com` (in Windows PowerShell, type `curl.exe`, because plain `curl` there is a different command). Lines starting with `>` are the request your machine sent. Lines starting with `<` are the response: a status line such as `HTTP/2 200`, then headers, then the page itself. Lines starting with `*` are curl's own notes about connecting. In a browser, press F12, open the Network tab and reload any page to see the same thing for every file the page loads.
+
 ---
 
 ## 1.3 The Frontend: Presentation and the Trust Boundary
 
-The **frontend** is the part of the application that runs on the user's device, typically JavaScript, HTML and CSS in a browser, or a mobile app. It is responsible for presentation, user interaction and client-side navigation. How the browser actually loads and runs it is the subject of Chapter 9.
+The **frontend** is the part of the application that runs on the user's device, typically JavaScript, HTML and CSS in a browser, or a mobile app. It is responsible for presentation, user interaction and client-side navigation. The frontend's files reach the device by download, like any other response: the browser requests them from the backend or from a **CDN** (content delivery network: servers around the world that keep copies of files close to users). How the browser actually loads and runs them is the subject of Chapter 9.
 
 The **backend** is the part of the application that runs on servers the operator controls: the processes that receive requests from frontends and other systems, apply the business rules, store and retrieve data, and talk to other services. Users never see it directly; they see only its responses. Frontend and backend meet at an API (Section 1.4), and everything behind that API (application servers, databases, caches, queues and the infrastructure in front of them) is the backend. That territory is the subject of this book. **Full-stack** engineering means working on both sides.
 
 ### The Rule of Client Trust
 
-Because frontend code runs on hardware the user controls, **the frontend is an untrusted environment**. You must assume the "client" can be anyone, including an attacker sending hand-crafted requests with a command-line tool.
+Because frontend code runs on hardware the user controls, **the frontend is an untrusted environment**. You must assume the "client" can be anyone, including an attacker sending hand-crafted requests with a command-line tool such as `curl` (Section 1.2).
 
 The **trust boundary** is the line between code and data you control (the backend and its infrastructure) and code and data you do not (anything on the user's side, or anything arriving over the network). Everything that crosses it inward must be treated as potentially hostile.
 
@@ -110,6 +112,8 @@ Content-Type: application/json
 
 {"email": "x@example.com", "password": "ab", "role": "admin"}
 ```
+
+This is a raw HTTP request. The first line gives the method (`POST`), the path (`/api/users`) and the protocol version. The next lines are **headers**, `Name: value` pairs carrying information about the request: `Host` names the site, and `Content-Type` says the body is JSON. A blank line ends the headers, and the body follows. Chapter 7 covers the format in full.
 
 The JavaScript check never ran. Notice the extra `"role": "admin"` field too: the attacker can send *any* data, not just the fields your form shows.
 
@@ -146,10 +150,11 @@ Why serialization matters: memory addresses, object references and language-spec
 A request to `api.example.com` does not land directly in the function you wrote. "The server" is usually a stack of specialised layers, each handling a distinct phase. A common backend can be understood through **three logical layers**. Not every system has all three as separate pieces, and some platforms (serverless functions, edge runtimes) collapse them, but the *roles* always exist somewhere:
 
 1. **Edge layer (load balancer / reverse proxy).** The outer perimeter.
-   - A **load balancer** distributes incoming requests across multiple identical backend instances so no single one is overwhelmed, and stops sending traffic to instances that fail health checks.
-   - A **reverse proxy** is a server that sits in front of application processes and receives requests on their behalf. It hides the internal layout from the internet and commonly performs **TLS termination** (decrypting HTTPS so the inner hops need not; Chapter 8), request buffering, compression and routing.
+   - A **load balancer** distributes incoming requests across multiple identical backend **instances** so no single one is overwhelmed. (An instance here is one running copy of the backend process, not an object.) It stops sending traffic to instances that fail **health checks**: small requests, such as `GET /health`, that it sends every few seconds to ask each instance "are you working?".
+   - A **reverse proxy** is a server that sits in front of application processes and receives requests on their behalf. It hides the internal layout from the internet and commonly performs **TLS termination**, request buffering, compression and routing. HTTPS is HTTP carried inside an encrypted channel called **TLS**; terminating TLS means decrypting it here, so the inner hops need not (Chapter 8).
+   - The difference is the job, not the box. A load balancer *spreads* traffic across many copies; a reverse proxy *stands in* for the processes behind it. One program (Nginx, for example) often does both, and a request may pass through both: a cloud load balancer picks a machine, and a reverse proxy on that machine hands the request to the right process.
    - Mechanisms: Chapter 10. Common implementations include Nginx, HAProxy, Envoy and cloud load balancers.
-2. **Application process (runtime / HTTP server).** The process that listens on a port, accepts network connections, reads raw HTTP bytes, parses them into a structured request, and hands that request to your code. It also decides *how* many requests run at once: with a pool of threads, an event loop, or several worker processes (Chapters 10 and 11).
+2. **Application process (runtime / HTTP server).** The process that listens on a port, accepts network connections, reads raw HTTP bytes, parses them into a structured request, and hands that request to your code. You will also hear it called the **application server**, and in Java the *servlet container*: all three names mean this one role. It also decides *how* many requests run at once: with a pool of **threads** (independent sequences of execution inside one process, each able to handle one request), an event loop (one thread that switches between many requests while each waits), or several worker processes (Chapters 3, 10 and 11).
 3. **Application code.** The logic you write: routing a request to the right handler, validating input, enforcing business rules, talking to databases and other services, and building the response (Chapter 12).
 
 The generic mechanism is always: **accept connection → parse HTTP → dispatch to a handler → run logic → write response.**
@@ -169,11 +174,13 @@ Your application code runs inside a process, and a process has memory: you can k
 - It is **ephemeral**: it is lost when the process crashes, restarts or is redeployed.
 - It is **isolated**: it is not shared between the multiple instances behind a load balancer. User A's request may hit instance 1 and user A's next request instance 2.
 
+Process memory is still useful for data you can afford to lose and rebuild, such as a local cached copy of something the database holds. It must never be the only copy.
+
 So backends rely on additional components. Each solves a specific problem. They are named here so you can recognise them; their mechanisms are covered in the chapters indicated.
 
-- **Relational database** (e.g. PostgreSQL, MySQL). The **system of record**: the authoritative store of application state. It provides **durability** (committed data survives crashes and, when configured correctly, power loss) and **isolation** of concurrent modifications. Durability is not magic. It is implemented with logs, buffers and careful use of the operating system's file APIs (Chapter 4 and Chapter 15). SQL and modelling: Chapter 14. Indexes: Chapter 16. Transactions: Chapter 17. Integration with application code: Chapter 18.
+- **Relational database** (e.g. PostgreSQL, MySQL). It stores data in tables of rows and columns and is queried in the language SQL. It is the **system of record**: the authoritative store of application state. Work is grouped into **transactions**: a transaction is a set of reads and writes that the database applies all together or not at all, so a failure halfway leaves no half-done change behind. The database provides **durability** (committed data survives crashes and, when configured correctly, power loss) and **isolation** of concurrent modifications. This is a different sense from "isolated" above: it means two transactions running at the same moment do not see each other's unfinished work. Durability is not magic. It is implemented with logs, buffers and careful use of the operating system's file APIs (Chapter 4 and Chapter 15). SQL and modelling: Chapter 14. Indexes: Chapter 16. Transactions: Chapter 17. Integration with application code: Chapter 18.
 - **Cache** (e.g. Redis, Memcached). A fast, usually in-memory store holding copies of data that is expensive to compute or fetch. It trades freshness for speed: a cache may serve data that is out of date. Chapter 21.
-- **Message queue / log** (e.g. RabbitMQ, Kafka). Lets the application hand work to background workers (send an email, process a video) so the user does not wait, and lets services exchange events without calling each other directly. Chapter 25.
+- **Message queue / log** (e.g. RabbitMQ, Kafka). Lets the application hand work to background workers (send an email, process a video) so the user does not wait, and lets services exchange events without calling each other directly. Here a **log** means an append-only list of messages. The word has other meanings in this book: the record of changes a database writes for durability, and the text lines an application prints about what it did. Context tells you which. Queues commonly deliver each message **at least once**: a message is never silently lost, but it may arrive twice, so workers must tolerate duplicates. Chapter 25.
 - **External services** (e.g. payment providers, email services, object storage). Third-party APIs your backend calls over the network. You control neither their availability nor their latency. Chapters 13 and 24.
 
 The following table is worth committing to memory, because every design and incident discussion comes back to it:
@@ -263,7 +270,7 @@ Deployment, containers and scaling are covered conceptually in Chapters 4 and 26
 
 As an application grows, an organisation must decide how to divide the *application code* itself.
 
-- A **monolith** is an application whose business capabilities (users, orders, payments, catalogue…) are built and deployed as **one deployable unit**, usually sharing one database. Calls between capabilities are in-process function calls.
+- A **monolith** is an application whose business capabilities (users, orders, payments, catalogue…) are built and deployed as **one deployable unit**, usually sharing one database. To **deploy** is to package a new version of the code, copy it to the servers and start it there in place of the old version. Calls between capabilities are in-process function calls.
 - A **microservice architecture** splits capabilities into **separately deployable services**, each typically owning its own data, communicating over the network (HTTP/gRPC calls or messages).
 
 The basic trade-off follows directly from Section 1.7:
@@ -272,9 +279,11 @@ The basic trade-off follows directly from Section 1.7:
 |---|---|---|
 | Calls between capabilities | In-process: fast; fail together | Network: slow; fail independently; unknown outcomes |
 | Data consistency across capabilities | One database transaction can cover them | Requires distributed patterns (sagas, outbox; Chapter 25) |
-| Independent deployment and scaling | No: deploy and scale as one | Yes: per service |
+| Deployment and scaling | Deployed as one unit; scaled by running more copies of the whole application | Each service deployed and scaled on its own |
 | Team autonomy at large scale | Harder | Easier |
 | Operational complexity | Lower | Much higher (discovery, tracing, versioning) |
+
+A monolith scales well: you run many identical instances behind a load balancer. What it cannot do is scale or release *one part* alone. The team row matters more than it looks. With 50 engineers in one deployable unit, every change waits for one shared release and one shared test run. Separate services let each team ship on its own schedule, and in practice that, rather than speed, is the usual reason to split.
 
 Splitting a monolith converts function calls into network calls, and therefore takes on *every* failure mode of Section 1.7. The full discussion, including the "modular monolith" middle ground and the "distributed monolith" failure, is in Chapter 12. For now, recognise both terms and the trade-off.
 
@@ -282,7 +291,7 @@ Splitting a monolith converts function calls into network calls, and therefore t
 
 ## 1.10 What Happens When You Click "Buy": Your Roadmap
 
-This is the most important section of the chapter. Each step maps to a mechanism explained in a later chapter.
+This is the most important section of the chapter, but not because you should understand it now. **You do not need to understand these steps yet.** Read it once for the shape of the journey and expect most terms to be new. Each step maps to a mechanism explained in the later chapter named in its right-hand column.
 
 The machinery is the same on every stack: **browser → DNS → TCP → TLS → HTTP → edge → application process → application code → database → external services and queues → response → browser.** The steps below are described generically. A Framework lens box afterwards shows the names a Java/Spring Boot backend gives the same steps.
 
@@ -297,6 +306,8 @@ Content-Type: application/json
 
 {"productId": 42, "quantity": 1}
 ```
+
+Two headers are new. `Cookie` carries a **session** identifier: a random token the server gave this browser at sign-in, so it can recognise later requests as coming from the same user. The browser sends it back automatically on every request to the site (Chapter 19). `Idempotency-Key` is explained in step 1.
 
 Notice what the body does *not* contain: the price. The client says what it wants to buy; the server decides what it costs (Section 1.3).
 
@@ -325,10 +336,10 @@ Notice what the body does *not* contain: the price. The client says what it want
 | Step | What happens | Chapter |
 |---|---|---|
 | 1 | The user clicks Buy. The page's JavaScript builds the request: a JSON body, the session cookie (attached by the browser), and a freshly generated **idempotency key**, a unique ID for this purchase attempt so that a retry of the same attempt cannot create a second order. | 9, 13 |
-| 2 | The browser knows (from a previous HSTS header) that this site requires HTTPS, so it never tries plain HTTP. | 8 |
-| 3 | The browser needs an IP address for `api.example.com`. It checks its own cache, then the OS asks a recursive DNS resolver, which may query the root, top-level-domain and authoritative servers. | 6 |
-| 4 | A TCP connection to the server's IP on port 443 is established: SYN → SYN-ACK → ACK. One round trip before any data flows. | 6 |
-| 5 | A TLS 1.3 handshake verifies the server's certificate and agrees encryption keys. Typically one more round trip. | 8 |
+| 2 | The browser knows (from a previous HSTS header, the site's instruction "always use HTTPS with me") that this site requires HTTPS, so it never tries plain HTTP. | 8 |
+| 3 | The browser needs an **IP address** for `api.example.com`: the numeric network address of the machine, such as `93.184.215.14`. **DNS**, the internet's directory of names, provides it. The browser checks its own cache, then the OS asks a recursive DNS resolver, which may query the root, top-level-domain and authoritative servers. | 6 |
+| 4 | A **TCP connection** (a reliable two-way stream of bytes between two programs) to the server's IP on port 443 is established: SYN → SYN-ACK → ACK. One round trip before any data flows. | 6 |
+| 5 | A TLS 1.3 handshake (TLS is the encryption under HTTPS) verifies the server's certificate and agrees encryption keys. Typically one more round trip. | 8 |
 | 6 | The HTTP request is sent over the encrypted connection. | 7 |
 
 If the browser already has an open connection to this host, steps 3–5 are skipped entirely. **Connection reuse** is a major latency optimisation (Chapters 6 and 7).
@@ -360,9 +371,11 @@ If the browser already has an open connection to this host, steps 3–5 are skip
 | 17 | The database parses each statement, and the optimizer chooses a plan (here, primary-key index lookups). | 16 |
 | 18 | The executor walks the indexes and fetches pages through the **buffer pool** (in memory if cached, from disk if not). | 15, 16 |
 | 19 | The stock update takes a **row lock**. If two users buy the last unit at the same moment, the second waits, then finds `stock = 0` and updates nothing. Plain reads elsewhere are not blocked (**MVCC**). | 17 |
-| 20 | An `OrderPlaced` event row is inserted into an **outbox** table in the *same* transaction, so the event exists if and only if the order does. | 25 |
+| 20 | An `OrderPlaced` event row is inserted into an **outbox** table in the *same* transaction, so the event exists if and only if the order does. Publishing straight to the queue after the commit would be unsafe: a crash between the two leaves an order whose event, and therefore whose email, is lost. | 25 |
 | 21 | `COMMIT`: the database writes its log record to durable storage before it reports success. | 4, 15 |
 | 22 | The connection is returned to the pool for the next request. | 18 |
+
+This is SQL, the database's query language (Chapter 14). Data lives in **tables** of rows. `SELECT` reads rows, `UPDATE` changes them and `INSERT` adds new ones; `WHERE` chooses which rows. `$1`, `$2` and `$3` are the separate parameters of step 16.
 
 ```sql
 -- step 16, in outline ($1 = product id, $2 = quantity, $3 = user id)
@@ -413,7 +426,7 @@ Why is the card charged *after* the commit rather than inside the transaction? H
 
 > **Framework lens: the same trace in Java/Spring Boot.** Step 9: embedded Tomcat takes a worker thread from its pool. Steps 10–11: Spring Security's filter chain runs, then Spring's `DispatcherServlet` routes to a `@RestController` method. Step 12: the Jackson library deserializes the JSON and Bean Validation annotations check it. Step 14: the `@Transactional` annotation causes a proxy object to begin a transaction (Chapter 12 explains proxies). Steps 15–16: JPA/Hibernate generates SQL, HikariCP provides the pooled connection, and JDBC sends a `PreparedStatement`. Step 25: Jackson serializes the DTO. These are *names for the steps*, not definitions of them. A Python/FastAPI or Node/Express backend performs the same steps under different names.
 
-**You do not need to understand these steps yet.** This trace is your map. Every term in it (DNS, TCP, TLS, middleware, idempotency key, connection pool, buffer pool, row lock, MVCC, outbox) is explained at mechanism level in the chapter shown. When you finish the book, return to this page. Every step should be something you could explain and debug. Chapter 27 repeats this trace with full depth and uses it for systematic diagnosis.
+**This trace is your map.** Every term in it (DNS, TCP, TLS, middleware, idempotency key, connection pool, buffer pool, row lock, MVCC, outbox) is explained at mechanism level in the chapter shown. When you finish the book, return to this page. Every step should be something you could explain and debug. Chapter 27 repeats this trace with full depth and uses it for systematic diagnosis.
 
 ---
 

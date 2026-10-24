@@ -503,7 +503,7 @@ Do not confuse that with **`169.254.169.254`**, the address many cloud providers
 
 ### Backend connection
 
-In a cloud network, the hypervisor answers DHCP with the address the cloud's control plane assigned to the instance. Instances are replaced, and replacements get new addresses, so configuration should never hard-code instance IPs; services find each other by DNS name (Section 6.6) or through service discovery (Chapter 26).
+In a cloud network, the hypervisor answers DHCP with the address the cloud's control plane (the provider's management system, which decides where instances run and what they are given) assigned to the instance. Instances are replaced, and replacements get new addresses, so configuration should never hard-code instance IPs; services find each other by DNS name (Section 6.6) or through service discovery (Chapter 26).
 
 ---
 
@@ -565,7 +565,7 @@ Step by step for flow A:
 
 Two consequences:
 
-- **SNAT only works for connections started from inside.** An unsolicited packet from the internet to `203.0.113.5` matches no entry, so the gateway has nowhere to send it. To accept inbound connections, an explicit **DNAT** rule (port forwarding) must map an outside address and port to an inside one. Container runtimes use DNAT when they publish container port 8080 on host port 8080, and Kubernetes uses it to turn a virtual service address into the address of one of the pods behind it.
+- **SNAT only works for connections started from inside.** An unsolicited packet from the internet to `203.0.113.5` matches no entry, so the gateway has nowhere to send it. To accept inbound connections, an explicit **DNAT** rule (port forwarding) must map an outside address and port to an inside one. Container runtimes use DNAT when they publish container port 8080 on host port 8080, and Kubernetes uses it to turn a virtual service address into the address of one of the pods behind it. (Kubernetes, the most common container orchestrator, runs containers in groups called **pods**, each with its own IP address; Chapter 26.)
 - **The table has finite size and its entries expire.** Every entry is removed after a period with no packets, the **idle timeout**. Section "Failure and diagnosis" below shows why this matters.
 
 ### Mechanism 3: IPv6 basics
@@ -623,7 +623,7 @@ NAT lets private hosts open connections to the internet while sharing a few publ
 
 ### Failure and diagnosis
 
-**The silent idle drop ("ghost connection").** Every NAT gateway and stateful firewall evicts entries that have been idle for its idle timeout; values range from tens of seconds to hours, depending on the product and its configuration (AWS documents 350 seconds for its NAT gateway at the time of writing). **Eviction sends nothing to either end.** Both the client's connection pool and the server still believe the connection is open. When the client next writes on it, the packet reaches the gateway, matches no entry, and is not a connection-opening packet, so the gateway either drops it (the client sees a **read timeout**) or answers with a TCP reset (the client sees **`Connection reset by peer`**).
+**The silent idle drop ("ghost connection").** Every NAT gateway and stateful firewall evicts entries that have been idle for its idle timeout; values range from tens of seconds to hours, depending on the product and its configuration (AWS, Amazon's cloud platform, documents 350 seconds for its NAT gateway at the time of writing). **Eviction sends nothing to either end.** Both the client's connection pool and the server still believe the connection is open. When the client next writes on it, the packet reaches the gateway, matches no entry, and is not a connection-opening packet, so the gateway either drops it (the client sees a **read timeout**) or answers with a TCP reset (the client sees **`Connection reset by peer`**).
 
 - *Evidence:* errors cluster on the first request after a quiet period and disappear on retry; the failing connections were idle for longer than the device's documented timeout; a packet capture shows the request leaving and either nothing or a reset coming back.
 - *Fixes:* close pooled connections that have been idle for less than the shortest idle timeout on the path, with a safety margin; or send keepalive probes (TCP keepalive, Section 6.8, or a protocol-level ping) more often than that timeout, which keeps the entry alive. A pool's **maximum idle time** (close connections unused for X seconds) is the right control for this; its **maximum lifetime** (close every connection after Y seconds, used or not) solves a different problem and adds reconnection work if set too low.

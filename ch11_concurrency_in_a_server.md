@@ -888,7 +888,7 @@ How to read a dump of hundreds of threads:
 
 | Bottleneck | CPU | Thread dump | Pools and queues | Downstream |
 |---|---|---|---|---|
-| **CPU saturation** | near 100% of all cores | most threads `RUNNABLE` in **your** compute frames (serialisation, regexes, loops) | worker queue growing | normal |
+| **CPU saturation** | near 100% of all cores | most threads `RUNNABLE` in **your** compute frames (serialisation, regular-expression matching, loops) | worker queue growing | normal |
 | **Lock contention** | low to moderate | many threads `BLOCKED` on the **same** monitor (or parked on the same lock), one holder | worker queue growing | normal |
 | **Pool exhaustion** | low | many threads parked in the pool's acquire method; holders doing something slow | pool at maximum with waiters; acquisition time high | maybe normal (holders waste connections) or slow |
 | **Slow downstream** | low | many threads `RUNNABLE` in **socket reads** to the same dependency | HTTP client pool full; worker pool full | that dependency's latency high |

@@ -1229,7 +1229,7 @@ The mapper builds `JdbcRowSetImpl`, calls `setDataSourceName` with the attacker'
 - Java's built-in serialisation (`ObjectInputStream.readObject`) calls `readObject` methods on classes the stream names. Public gadget chains through common libraries (Apache Commons Collections among the first, demonstrated in 2015) made this a widespread remote-code-execution vector.
 - Python's `pickle` can instruct the loader to call any function with any arguments, by design. Python's documentation states that the module is not secure and that only trusted data should be unpickled.
 - PHP's `unserialize`, and .NET's `BinaryFormatter` (which Microsoft has deprecated and recommends against using) have the same property.
-- Some YAML loaders construct arbitrary types from tags in the document (PyYAML's unsafe loader, older defaults of the Java library SnakeYAML).
+- Some loaders for YAML (a text format for configuration files, similar in purpose to JSON) construct arbitrary types from tags in the document (PyYAML's unsafe loader, older defaults of the Java library SnakeYAML).
 
 ### Mechanism 4: mitigation
 

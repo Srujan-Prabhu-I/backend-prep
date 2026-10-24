@@ -76,7 +76,7 @@ Chapter 24 showed what synchronous chains cost: latency adds up along the chain,
 | Load | spikes hit every component at once | the queue absorbs spikes; consumers work at their own pace |
 | Consistency seen by the user | the result is complete when the response arrives | the result arrives later: **eventual consistency** (Chapter 22, Section 22.8) |
 | Error handling | the caller gets the error and can tell the user | errors happen after the user has gone; they must be retried, parked or compensated |
-| Debugging | one call stack, one trace | causes and effects separated in time and process; needs correlation IDs |
+| Debugging | one call stack, one trace | causes and effects separated in time and process; needs correlation IDs (one ID carried by every message and log line of the same business flow) |
 
 ### Concrete: deciding what goes async
 

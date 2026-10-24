@@ -350,7 +350,7 @@ A scatter–gather request is as slow as its **slowest** shard. If each of 20 sh
    so most requests see a "rare" slow response
 ```
 
-Fan-out turns rare tail latency into common latency (Chapter 26 covers percentiles). Mitigations: fewer shards per query (better keys, global indexes), hedged requests to replicas for the slowest shards, per-shard timeouts with partial results where acceptable, and pagination with per-shard limits.
+Fan-out turns rare tail latency into common latency (Chapter 26 covers percentiles). Mitigations: fewer shards per query (better keys, global indexes), hedged requests to replicas for the slowest shards (if a shard has not answered within its usual time, send the same read to a replica and use whichever reply arrives first; Chapter 24), per-shard timeouts with partial results where acceptable, and pagination with per-shard limits.
 
 ### Mechanism: joins across shards
 

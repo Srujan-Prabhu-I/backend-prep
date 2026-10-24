@@ -63,7 +63,7 @@ A CPU core repeats one loop, billions of times per second:
 ```
 
 - The **program counter (PC)** is a special register holding the address of the next instruction.
-- **Registers** are a few dozen tiny storage slots *inside* the core, each holding one value (for example 64 bits). Arithmetic happens only on registers, so data in memory must be **loaded** into a register first and **stored** back afterwards.
+- **Registers** are a few dozen tiny storage slots *inside* the core, each holding one value (for example 64 bits). A **bit** is a single 0 or 1. A **byte** is 8 bits, enough for a number from 0 to 255 or one plain English character. Sizes are counted in bytes: a kilobyte (KB) is about a thousand bytes (1,024 in some contexts), a megabyte (MB) about a million, a gigabyte (GB) about a billion. Arithmetic happens only on registers, so data in memory must be **loaded** into a register first and **stored** back afterwards.
 - The **ALU (arithmetic logic unit)** performs the arithmetic and comparisons.
 
 Consider a single line such as `total = total + price`. On a typical machine it becomes roughly:
@@ -87,15 +87,15 @@ The consequence: a core can complete several instructions per clock tick *when i
 
 - A **core** is an independent execution unit with its own registers, pipeline and small caches. A "16-core" CPU can execute 16 instruction streams truly simultaneously. That is **parallelism** (Chapter 5).
 - A software **thread** is one independent sequence of instructions inside a running program, with its own program counter, registers and stack. The operating system decides which thread runs on which core at each moment (Chapter 3 defines threads properly). A program with several threads can use several cores at once.
-- **Simultaneous multithreading (SMT)**, marketed by Intel as Hyper-Threading, lets one core hold the state of two instruction streams (two sets of registers) and interleave them, so when one stream stalls waiting for memory, the other uses the execution units. The OS sees each as a separate logical CPU. Two hardware threads on one core do **not** give twice the throughput. They share the execution units and caches, and the gain depends on how often each stream stalls.
+- **Simultaneous multithreading (SMT)**, marketed by Intel as Hyper-Threading, lets one core hold the state of two instruction streams (two sets of registers) and interleave them, so when one stream stalls waiting for memory, the other uses the execution units. The OS sees each as a separate logical CPU. Two hardware threads on one core do **not** give twice the **throughput** (the amount of work completed per second; latency, by contrast, is how long one piece of work takes). They share the execution units and caches, and the gain depends on how often each stream stalls.
 
 > **Backend connection.** When a cloud provider sells you "4 vCPUs", those are often hardware threads, not full cores. A CPU-heavy workload (JSON serialization, encryption, image processing) may get much less than 4× the throughput of one vCPU.
 
 ### Failure and diagnosis
 
 - *Symptom:* a service is slow. The first question is whether the CPU is busy or waiting.
-- *Evidence:* if per-core CPU utilisation (from `top` or your platform's CPU metrics) is near 100% while latency rises, the work is CPU-bound: too many instructions. If CPU is low while latency is high, the program is waiting for memory, disk, network or locks, and more CPU will not help. On Linux, `perf stat` reports instructions per cycle (IPC); a low IPC on a busy core means it is mostly stalled on memory (Section 2.3).
-- *Fix:* for CPU-bound work, do less work (a better algorithm, less serialization) or add cores. For waiting, find what is being waited on (Chapters 4, 6 and 26).
+- *Evidence:* if per-core CPU utilisation (from `top` on Linux and macOS, Task Manager on Windows, or your platform's CPU metrics) is near 100% while latency rises, the core is busy. Busy has two causes. Either the work is CPU-bound (too many instructions), or the core is stalled waiting for RAM. A memory stall counts as busy time, because the core cannot run anything else meanwhile. On Linux, `perf stat` separates the two: it reports instructions per cycle (IPC), and a low IPC on a busy core means it is mostly stalled on memory (Section 2.3). If CPU is *low* while latency is high, the program is waiting outside the CPU, for disk, network or locks, and more CPU will not help.
+- *Fix:* for CPU-bound work, do less work (a better algorithm, less serialization) or add cores. For memory stalls, improve locality (Section 2.3). For waiting outside the CPU, find what is being waited on (Chapters 4, 6 and 26).
 
 ### Guarantees and non-guarantees
 
@@ -123,6 +123,8 @@ This only works because programs exhibit **locality** (Section 2.3): they tend t
 ### The numbers
 
 The figures below are **orders of magnitude**, not exact values. They vary with hardware generation and workload, so treat them as estimation tools, not specifications.
+
+Each unit is a thousand times the next: 1 second = 1,000 milliseconds (ms), 1 ms = 1,000 microseconds (µs), and 1 µs = 1,000 nanoseconds (ns). **RTT** (round-trip time) is the time for a message to reach the other side and a reply to come back. **NVMe** is the interface most modern SSDs use to connect directly to the processor; it is much faster than the older SATA interface that early SSDs shared with hard disks.
 
 ```text
              ▲ faster, smaller, more expensive per byte
@@ -241,6 +243,8 @@ while node != null:
 
 Both loops do the same arithmetic. The array version mostly hits the cache (and hardware **prefetchers** detect the sequential pattern and fetch lines ahead of time). The linked-list version can miss on almost every node. On large data sets the difference is commonly several times, sometimes more. Big-O notation says both are O(N); the memory hierarchy says they are not equally fast.
 
+**Big-O notation** describes how an algorithm's work grows with the size of its input, N, ignoring constant factors. O(1) means the work does not grow with N. O(N) means it grows in proportion: twice the data, twice the work. O(N²) means twice the data, four times the work. O(log N) means the work grows by only one step each time N doubles. In this book, log means log base 2: log₂ N is how many times N can be halved before reaching 1, so log₂ 1,000 ≈ 10 and log₂ 1,000,000 ≈ 20. Big-O tells you how cost *scales*; the constant factors it ignores, such as cache misses, decide how fast the code actually is. This example shows the gap: two O(N) loops whose real speeds differ several times.
+
 ### Cache coherence and false sharing
 
 Each core has its own L1/L2 caches. If two cores cache the same line and one writes to it, the other's copy becomes stale. **Cache coherence protocols** (the MESI family is the textbook example) keep cores consistent: before a core writes to a line, it must gain exclusive ownership, which **invalidates** the copies in other cores' caches. The other cores must then re-fetch the line.
@@ -264,7 +268,7 @@ Each core has its own L1/L2 caches. If two cores cache the same line and one wri
    t3: Core 0 writes counterA → re-fetch again ...   (repeat millions of times)
 ```
 
-**Symptom:** a multi-threaded program that should scale linearly with cores gets *slower* as you add threads, even though threads touch "separate" data. **Fix:** pad or align hot, independently written variables so they occupy different cache lines, or have each thread accumulate locally and combine at the end.
+**Symptom:** a multi-threaded program that should scale linearly with cores gets *slower* as you add threads, even though threads touch "separate" data. **Fix:** pad or align hot, independently written variables so they occupy different cache lines, or have each thread accumulate locally and combine at the end. Padding means adding unused space: follow each 8-byte counter with 56 unused bytes, and each counter fills a 64-byte line of its own.
 
 > **Java lens.** The JDK marks some of its own hot fields with an internal `@Contended` annotation, which makes the JVM pad them onto separate cache lines. Application code can use it only with an extra JVM flag, so most code pads manually or uses per-thread accumulators.
 >
@@ -316,12 +320,12 @@ So a **random** read costs roughly 5–10 ms of mechanical movement, which limit
 **Definition.** An **SSD** stores data in NAND flash memory chips with no moving parts. A controller with its own processor and firmware manages them.
 
 **Mechanism and its quirks:**
-- Flash is read and written in **pages** (commonly 4–16 KB), but can only be **erased** in much larger **blocks** (many pages; often megabytes).
+- Flash is read and written in **pages** (commonly 4–16 KB), but can only be **erased** in much larger **blocks** (many pages; often megabytes). Note this flash-specific meaning: here a block is the *erase* unit. Elsewhere, including the rest of this chapter, a block just means the unit storage is read and written in.
 - A page **cannot be overwritten in place**. It must be erased first, and only whole blocks can be erased.
 - So the controller's **flash translation layer (FTL)** writes updated data to a fresh page, marks the old page invalid, and keeps a mapping from logical addresses to physical pages. Later, **garbage collection** inside the SSD copies the still-valid pages out of a block so the block can be erased.
 - This internal copying causes **write amplification**: one logical write can cause several physical writes. Flash cells also wear out after a limited number of erase cycles, so the controller spreads writes evenly (**wear levelling**).
 
-**Performance.** No seek, so a random read takes tens of microseconds (NVMe drives) and a fast SSD sustains hundreds of thousands of IOPS. **Random vs sequential still matters, but the gap is far smaller**, often single-digit multiples rather than 100×. Sustained heavy random writes can trigger internal garbage collection and cause latency spikes.
+**Performance.** No seek, so a random read takes tens of microseconds (NVMe drives) and a fast SSD sustains hundreds of thousands of IOPS. **Random vs sequential still matters, but the gap is far smaller**, often single-digit multiples rather than 100×. Sustained heavy random writes can trigger internal garbage collection and cause latency spikes. This is why sequential, append-only writes (such as a database's log) still help on SSDs: they fill blocks in order, which leaves less copying for garbage collection and less write amplification.
 
 ### Comparison
 
@@ -359,7 +363,7 @@ Both kinds of device have **volatile write caches** (DRAM on the drive). A drive
 
 - A **compiler** translates source code, *before* the program runs, into another form, typically **machine code** (instructions for a specific CPU architecture) or **bytecode**.
 - An **interpreter** executes a program by reading its code (source or bytecode) and performing each operation itself, *while* the program runs, without first producing machine code for the whole program.
-- **Bytecode** is a compact, CPU-independent instruction set designed for a **virtual machine (VM)**: a program (such as the JVM) that executes bytecode by interpreting it and/or compiling it to machine code.
+- **Bytecode** is a compact, CPU-independent instruction set designed for a **virtual machine (VM)**: a program (such as the JVM) that executes bytecode by interpreting it and/or compiling it to machine code. This is a different meaning from the cloud *virtual machine* of Chapter 1, a simulated whole computer rented from a provider; the two share a name only.
 - A **just-in-time (JIT) compiler** compiles code to machine code **during execution**, usually only the parts that run frequently ("hot" code), using information observed at runtime.
 - **Ahead-of-time (AOT) compilation** produces machine code before the program runs.
 
@@ -393,6 +397,7 @@ There is a three-way trade-off between **startup time**, **peak speed** and **po
 ```
 
 - **Tiered compilation:** many VMs use a quick, lightly optimising compiler first and a slower, heavily optimising one for the hottest code. The HotSpot JVM has C1 and C2 tiers; V8 interprets with Ignition and optimises hot code with TurboFan, with intermediate tiers in recent versions.
+- **Inlining:** the JIT copies the body of a small, frequently called function into its caller. This removes the cost of the call and lets the compiler optimise both pieces of code together. It is speculative when the call could reach several implementations (for example, an interface method) but only one has ever been seen.
 - **Speculation and deoptimisation:** if the JIT assumed "this variable is always an integer" and a string arrives, the compiled code is discarded and execution falls back to the interpreter until it recompiles.
 
 ### Comparison
@@ -406,9 +411,11 @@ There is a three-way trade-off between **startup time**, **peak speed** and **po
 
 "Compiled vs interpreted" describes an **implementation**, not a language. Python has interpreters (CPython) and JIT implementations (PyPy). Java is normally JIT-compiled but can be AOT-compiled.
 
+> **Java lens: see it yourself.** `javac Hello.java` produces `Hello.class`, a file of bytecode. `javap -c Hello` prints that bytecode as readable instructions. `java Hello` starts the JVM, which interprets the bytecode and JIT-compiles hot methods; adding the flag `-XX:+PrintCompilation` makes it print a line for each method as it is compiled.
+
 ### Backend connection: warm-up
 
-A JIT-based service is slowest right after it starts: code is being interpreted and compiled, and caches are cold. If a freshly deployed instance immediately receives full traffic, its first requests can be much slower than steady state, which shows up as a latency bump after every deploy. Mitigations include sending synthetic **warm-up** traffic before marking an instance ready (readiness checks, Chapter 24), ramping traffic gradually (deployment strategies, Chapter 26), or using AOT/startup snapshots for fast-scaling services. The evidence is latency broken down per instance: only new instances are slow, and only for their first minutes. JIT runtimes can also log their compilation activity, which is heavy during exactly that window.
+A JIT-based service is slowest right after it starts: code is being interpreted and compiled, and caches are cold. If a freshly deployed instance immediately receives full traffic, its first requests can be much slower than steady state, which shows up as a latency bump after every deploy. Mitigations include sending synthetic **warm-up** traffic before marking an instance ready (a readiness check tells the load balancer that an instance may now receive traffic; Chapter 24), ramping traffic gradually (deployment strategies, Chapter 26), or using AOT/startup snapshots for fast-scaling services. The evidence is latency broken down per instance: only new instances are slow, and only for their first minutes. JIT runtimes can also log their compilation activity, which is heavy during exactly that window.
 
 ### Guarantees and non-guarantees
 
@@ -428,7 +435,7 @@ When a program runs, its memory is organised into regions with different purpose
 
 ### The full layout
 
-Here is a typical layout of one process's address space (exact arrangement varies by OS and architecture; the OS side is covered in Chapter 3):
+Picture memory as one long numbered array of bytes. A byte's number is its **address**. A process's **address space** is the range of addresses it may use; Chapter 3 explains how the operating system gives each process its own. Here is a typical layout of one process's address space (exact arrangement varies by OS and architecture). Only the stack and the heap matter for the rest of this chapter; the other regions are shown for completeness.
 
 ```text
  high addresses
@@ -455,6 +462,8 @@ Here is a typical layout of one process's address space (exact arrangement varie
  └──────────────────────────────┘
  low addresses
 ```
+
+This diagram puts high addresses at the top, so a stack growing toward lower addresses is drawn growing down. The recursion picture below draws new frames on top instead, the usual way to draw a stack. Both show the same thing: the newest frame is at the growing end.
 
 In multi-threaded programs, **each thread has its own stack**, while the heap, globals and code are shared by all threads in the process. That is exactly why heap data needs synchronisation and stack locals don't (Chapter 5).
 
@@ -489,11 +498,21 @@ Each thread's stack has a fixed maximum size set by the OS or runtime (commonly 
 
 *Typical backend causes:* recursive processing of deeply nested input (a maliciously nested JSON document), cyclic object graphs serialised recursively (entity A references B which references A), and accidental infinite recursion. *Defences:* depth limits on parsers, iterative algorithms, and breaking cycles before serialisation (Chapter 12). *Evidence:* the error's stack trace shows the same few frames repeating hundreds or thousands of times, which identifies the recursive path.
 
+> **Java lens: see it yourself.** A method that calls itself with no base case, such as `static int f(int n) { return f(n + 1); }`, throws `StackOverflowError` within milliseconds. Starting the JVM with `-Xss` (for example `-Xss256k`) changes the thread stack size, and you will see the overflow come sooner or later.
+
 ### The heap
 
-Heap allocation is more expensive than stack allocation. The allocator must find a free block of the right size and track it, and something must eventually free it. Many runtimes make the common case fast: managed runtimes give each thread a private chunk (a **thread-local allocation buffer**) and allocate by bumping a pointer. The cost moves to **reclamation**, which is where garbage collection (Section 2.8) comes in.
+Heap allocation is more expensive than stack allocation. The allocator must find a free block of the right size and track it, and something must eventually free it. Many runtimes make the common case fast. **Managed runtimes** (those with a garbage collector, such as the JVM) give each thread a private chunk of heap, a **thread-local allocation buffer**, and allocate by **bumping a pointer**. The buffer keeps a "next free" marker. Each allocation hands out the bytes at the marker and moves the marker forward by the object's size:
 
-Heap memory can become **fragmented**: there may be enough free bytes in total but no single contiguous block large enough for a request. Some garbage collectors fix this by **compacting** (moving live objects together).
+```text
+ thread-local buffer:  [obj1][obj2][obj3]│ ............ free ............ │
+                                         ▲ next free: a new 24-byte object goes here,
+                                           then the marker moves 24 bytes right
+```
+
+The cost moves to **reclamation**, which is where garbage collection (Section 2.8) comes in.
+
+Heap memory can become **fragmented**: there may be enough free bytes in total but no single contiguous block large enough for a request. For example, 100 free bytes split into ten separate 10-byte gaps cannot hold one 30-byte object. Some garbage collectors fix this by **compacting** (moving live objects together).
 
 ### Stack vs heap at a glance
 
@@ -506,7 +525,7 @@ Heap memory can become **fragmented**: there may be enough free bytes in total b
 | Size | Small, fixed limit per thread | Large, bounded by configuration/OS |
 | Typical failure | Stack overflow | Leaks, fragmentation, out-of-memory, GC pauses |
 
-**Common misconception:** "primitives go on the stack, objects on the heap" is a simplification of how some languages *usually* behave. A local variable *holding a reference* lives on the stack while the object it points to lives on the heap. Compilers may also place objects on the stack when they can prove the object never escapes the function (**escape analysis**).
+**Common misconception:** "primitives go on the stack, objects on the heap" is a simplification of how some languages *usually* behave. A local variable *holding a reference* lives on the stack while the object it points to lives on the heap. Compilers may also keep an object off the heap when they can prove it never escapes the function (**escape analysis**). For example, a temporary point object built and used only inside one method, and never stored or returned, can live in that call's frame or in registers, and costs nothing to reclaim.
 
 ---
 
@@ -579,7 +598,7 @@ function handle(request):
     ...
 ```
 
-Common real-world causes: unbounded in-process caches or maps keyed by user/request IDs; listeners or callbacks registered and never removed; per-thread storage on pooled threads that is never cleared (Chapter 11); collections growing inside long-lived singletons. The symptom is memory that climbs steadily over hours or days, increasingly frequent and longer GCs, then an out-of-memory crash.
+Common real-world causes: unbounded in-process caches or maps keyed by user/request IDs; listeners or callbacks (functions handed to a library to be called later, when something happens) registered and never removed; per-thread storage on pooled threads that is never cleared (Chapter 11); collections growing inside long-lived singletons. The symptom is memory that climbs steadily over hours or days, increasingly frequent and longer GCs, then an out-of-memory crash.
 
 ---
 
@@ -635,17 +654,17 @@ Common real-world causes: unbounded in-process caches or maps keyed by user/requ
 ```
 
 1. New objects are allocated in the young generation (cheaply, by bumping a pointer).
-2. When it fills, a **minor (young) collection** runs. Because most young objects are already dead, it only needs to copy the few survivors, which is fast.
+2. When eden fills, a **minor (young) collection** runs. It is a copying collection (Mechanism 1): it copies the live objects from eden and from the survivor space in use into the other, empty survivor space. Eden and the old survivor space are then free as a whole. Its cost depends only on the survivors, and most young objects are already dead, so it is fast. That is also why there are two survivor spaces: they swap roles at every minor collection, so one is always empty and ready to receive the copies.
 3. Objects that survive several minor collections are **promoted** to the old generation.
 4. The old generation is collected less often, by a **major (old/full) collection** that is more expensive because it holds many live objects.
 
-How does a minor GC avoid scanning the whole old generation for references *into* the young generation? The runtime inserts a **write barrier**, a few extra instructions on every reference write that record ("card-mark") old-generation regions that were modified to point at young objects. A minor GC then scans only those recorded regions as extra roots.
+Old objects can point to young ones. A long-lived cache sits in the old generation, and `cache.put(key, newEntry)` stores a reference to a brand-new entry in it. A minor GC must treat that reference as a root, or it would free an entry the cache still uses. But scanning the whole old generation to find such references would make every minor GC as slow as a major one. Instead, the runtime inserts a **write barrier**, a few extra instructions on every reference write that record ("card-mark") old-generation regions that were modified to point at young objects. A minor GC then scans only those recorded regions as extra roots.
 
 ### Mechanism 3: stop-the-world vs concurrent
 
 While the collector traces the graph, the program (the **mutator**) is changing it. The simplest fix is to pause all application threads: a **stop-the-world (STW) pause**.
 
-Modern collectors do most of their work **concurrently**, while application threads run, and keep only short STW phases (for example, scanning roots). This needs extra machinery (barriers that let the collector notice references changed by the running program) and costs some throughput and extra memory.
+Modern collectors do most of their work **concurrently**, while application threads run, and keep only short STW phases (for example, scanning roots). This needs extra machinery and costs some throughput and extra memory. The danger is a reference that moves while the collector works. Suppose the program copies a reference to object X into an object the collector has already scanned, then deletes it from the object that has not been scanned yet. The collector never sees X, and would free it while it is still in use. Barriers, small pieces of code run on reference writes, record such changes so the collector can recheck them.
 
 The **GC trade-off triangle** is a common way to frame collector design: improving one of these three usually costs one of the others, so no collector is best at all three:
 - **Throughput:** the share of CPU time spent running your code rather than collecting.
@@ -692,6 +711,8 @@ The average hides the problem; the tail exposes it. This is the classic "average
 
 **Mitigations:** reduce allocation rate (fewer temporary objects on hot paths); size the heap with headroom; choose a collector matching your latency goals; stream large data instead of loading it whole (Chapters 7 and 18); bound caches (Chapter 21).
 
+> **Java lens: see it yourself.** Start any Java program with `-Xlog:gc` (Java 9 and later) and the JVM prints one line per collection, for example `[gc] GC(3) Pause Young (Normal) (G1 Evacuation Pause) 24M->6M(256M) 3.141ms`: a minor collection that shrank the used heap from 24 MB to 6 MB, out of 256 MB, with a 3 ms pause. `jcmd <pid> GC.heap_dump leak.hprof` writes a **heap dump** (a snapshot of every object on the heap) of a running process; `jcmd` with no arguments lists the process IDs. Tools such as VisualVM or Eclipse MAT open the dump and show which collections hold the most memory, which is how you would find the `requestCache` of Section 2.7.
+
 ### Guarantees and non-guarantees
 
 - **Guaranteed:** unreachable objects are eventually reclaimed; you cannot use-after-free or double-free.
@@ -703,13 +724,21 @@ The average hides the problem; the tail exposes it. This is the classic "average
 
 A **language runtime** is the software layer that executes a program and provides services the language promises: memory management, threads or tasks, standard I/O, and sometimes a JIT. For a backend engineer, the runtime determines how concurrency, memory and latency behave, which matters more than syntax.
 
+The table below uses some new terms, briefly defined here:
+- An **OS thread** is a thread the operating system itself creates and schedules (Chapter 3), the kind described in Section 2.1.
+- A **virtual thread** (Java) or **goroutine** (Go) is a lighter thread managed by the runtime, which runs many of them on a few OS threads. This is **M:N scheduling**: M runtime threads share N OS threads.
+- With **blocking I/O**, a thread that asks for data from disk or the network stops and waits until the data arrives. With **non-blocking I/O**, the request returns at once and the program is told later when the data is ready, so one thread can have many requests waiting at the same time.
+- An **event loop** is a single thread built on non-blocking I/O. It waits until any pending operation completes, runs the code that was waiting for it, and goes back to waiting.
+
+Read the table once now, and again after the subsections that follow it.
+
 | | JVM (Java, Kotlin) | CPython (Python) | Node.js (V8, JavaScript) | Go |
 |---|---|---|---|---|
 | Execution | Bytecode; interpreter + tiered JIT | Bytecode interpreter | Interpreter + tiered JIT | AOT-compiled native binary |
 | Memory management | Tracing, generational, several collectors | Reference counting + cycle collector | Tracing, generational | Tracing, concurrent, non-generational, non-moving |
 | Parallel CPU execution of user code | Yes: many OS threads | Limited by the **GIL** in the default build | One JS thread per event loop; parallelism via worker threads/processes | Yes: goroutines on all cores |
 | Concurrency model | OS threads; virtual threads (Java 21+) | Threads (GIL), `asyncio` event loop, multiple processes | Single-threaded **event loop** with non-blocking I/O | Goroutines (M:N scheduled by the runtime) |
-| Typical server scaling | Thread pool or virtual threads in one process | Several worker processes per machine | One process per core (cluster) or more instances | One process using all cores |
+| Typical server scaling | Thread pool or virtual threads in one process | Several worker processes per machine | One process per core (Node's `cluster` module) or more instances | One process using all cores |
 
 ### The GIL (CPython)
 
@@ -729,7 +758,7 @@ The event loop's mechanism is in Chapter 5; its OS foundation (epoll) is in Chap
 
 ### The JVM
 
-The JVM runs a service as one process that uses all cores: each Java thread has classically been an OS thread, so CPU-bound work runs in parallel within one process. The heap is a large, explicitly sized region managed by a generational tracing collector chosen at startup (Section 2.8), and code is interpreted first and JIT-compiled once hot (Section 2.5). Its characteristic production concerns follow from that design: warm-up after every start, GC pauses in the latency tail, and process memory well beyond the heap (Section 2.10). Virtual threads (Java 21+) make *waiting* cheap, but they add no CPU (Chapter 5).
+The JVM runs a service as one process that uses all cores: each Java thread has classically been an OS thread, so CPU-bound work runs in parallel within one process. The heap is a large, explicitly sized region managed by a generational tracing collector chosen at startup (Section 2.8), and code is interpreted first and JIT-compiled once hot (Section 2.5). Its characteristic production concerns follow from that design: warm-up after every start, GC pauses in the latency tail, and process memory well beyond the heap (Section 2.10). Virtual threads (Java 21+) make *waiting* cheap, so one process can hold far more requests that are waiting on I/O. They add no CPU, though: CPU-bound work runs no faster (Chapter 5).
 
 ### Go
 
@@ -763,7 +792,7 @@ You configure a heap size, say 2 GB, and then the operating system reports that 
 ```
 
 So **total process memory = heap + everything else**. Consequences:
-- If you run in a **container** (a group of processes that the kernel isolates and limits as a unit, including a memory limit; Chapter 4) with a 2 GB memory limit and set the heap to 2 GB, the process will exceed the limit and the **kernel will kill it** (OOM kill). This happens without a heap out-of-memory error, because the runtime never ran out of *heap* (mechanism in Chapters 3 and 4).
+- If you run in a **container** (a group of processes that the kernel isolates and limits as a unit, including a memory limit; Chapter 4) with a 2 GB memory limit and set the heap to 2 GB, the process will exceed the limit and the **kernel will kill it** (OOM kill, for "out of memory"). The **kernel** is the core of the operating system, the part that controls memory and processes (Chapter 3). This happens without a heap out-of-memory error, because the runtime never ran out of *heap*. The only trace in the process itself is its exit code, 137, which means "killed by the operating system" (mechanism in Chapters 3 and 4).
 - Rule of thumb: leave substantial room (often 25% or more) between heap max and the container or machine limit, and measure actual usage under load. Many runtimes can size the heap as a fraction of the container limit.
 - Thousands of threads cost memory through their stacks. This is one reason thread-per-request designs have limits (Chapter 11).
 

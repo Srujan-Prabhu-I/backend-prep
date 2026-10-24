@@ -1070,7 +1070,7 @@ Compared with TCP over the loopback interface on the same machine, a Unix domain
 - lets the server learn the connecting process's PID, user and group from the kernel (the `SO_PEERCRED` option on Linux), which databases use for password-less local authentication;
 - can **pass open file descriptors** between processes (a message with `SCM_RIGHTS`): the kernel installs a reference to the same open file description in the receiver's FD table. Zero-downtime restart schemes use this to hand a listening socket from an old server process to a new one.
 
-Common backend uses: local connections to PostgreSQL, MySQL or Redis; the Docker daemon's control socket (`/var/run/docker.sock`); communication between a web server and an application server, or between an application and a sidecar proxy, on the same host.
+Common backend uses: local connections to PostgreSQL, MySQL or Redis; the control socket of Docker, the most widely used tool for building and running containers (`/var/run/docker.sock`; containers are Section 4.10); communication between a web server and an application server, or between an application and a sidecar proxy, on the same host.
 
 ### Shared memory
 
@@ -1329,7 +1329,7 @@ Linux provides eight namespace types. A process belongs to exactly one namespace
 
 **Networking, briefly.** A new network namespace contains only a loopback interface. The runtime creates a **virtual ethernet pair** (veth), a virtual cable with one end inside the container (seen as `eth0`) and the other attached to a software bridge on the host. Publishing a container port ("map host port 8080 to container port 8080") is done with network address translation rules on the host (NAT, Chapter 6). Containers in the same Kubernetes **pod** (the orchestrator's smallest deployable unit: one or more containers always scheduled together on one host; Chapter 26) **share** one network namespace, which is why they can reach each other on `localhost`.
 
-**Try it yourself** (requires root on a Linux machine): `unshare` runs a program in new namespaces without any container runtime.
+**Try it yourself** (requires a Linux machine and **root**, the administrator account that bypasses permission checks; `sudo` runs one command as root): `unshare` runs a program in new namespaces without any container runtime.
 
 ```text
 $ sudo unshare --pid --fork --mount-proc --uts bash
@@ -1410,7 +1410,7 @@ An image is a stack of read-only layers. Each layer is an archive of the files a
 - **Reading** a file finds the topmost layer that contains it.
 - **Modifying** a file from a lower layer first **copies it up** into the writable layer (the first write to a large file is therefore slow), then changes the copy.
 - **Deleting** a lower-layer file creates a **whiteout** entry in the upper layer that hides it.
-- Layers are identified by a cryptographic hash of their contents, so ten containers from the same image, and different images with the same base, **share** the read-only layers on disk and in the page cache.
+- Layers are identified by a cryptographic hash of their contents (a short fingerprint computed from the bytes, which changes completely if any byte changes; Chapter 8), so ten containers from the same image, and different images with the same base, **share** the read-only layers on disk and in the page cache.
 - The writable layer **disappears when the container is removed**. Anything that must survive (database files, uploads) belongs on a **volume**, a host directory or network disk mounted into the container. Write-heavy data should be on a volume anyway, because overlay copy-up and lookups add overhead.
 
 ### Security implications of a shared kernel

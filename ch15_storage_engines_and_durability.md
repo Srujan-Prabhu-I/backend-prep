@@ -680,7 +680,7 @@ Crash recovery is why a database can promise durability while writing data pages
 
 ### Definitions
 
-An **update-in-place** (page-oriented) storage engine keeps data in a structure of fixed-size pages, usually a **B+tree** (Chapter 16 teaches the structure itself), and changes a row by modifying the page that holds it, with a write-ahead log for durability. PostgreSQL, InnoDB, SQL Server, Oracle and SQLite work this way.
+An **update-in-place** (page-oriented) storage engine keeps data in a structure of fixed-size pages, usually a **B+tree** (Chapter 16 teaches the structure itself), and changes a row by modifying the page that holds it, with a write-ahead log for durability. For this chapter, picture a B+tree as a sorted, shallow tree of pages. Inner pages point the way, and leaf pages hold the rows (or pointers to them) in key order. A write finds its leaf in three or four page reads and changes that page wherever it sits on disk, which is why writes to random keys become random I/O. PostgreSQL, InnoDB, SQL Server, Oracle and SQLite work this way.
 
 A **log-structured** storage engine never modifies data files in place. It buffers writes in memory and writes them out as new, immutable, sorted files, merging those files in the background. The dominant design is the **log-structured merge tree** (LSM-tree), introduced by Patrick O'Neil and colleagues in 1996, and used by RocksDB and LevelDB, by systems built on them (MyRocks, TiKV), by CockroachDB's Pebble engine, and by Cassandra, ScyllaDB and HBase.
 
