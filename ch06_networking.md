@@ -52,6 +52,10 @@ This chapter opens the box. Most failures you will debug between machines are me
 
 ### Definition
 
+A **computer network** is a set of devices connected by **links** (copper cables, optical fibre, radio) so that they can exchange data by following shared protocols. The devices are **hosts** (servers, laptops and phones: the endpoints that run applications) and **forwarding devices** (switches and routers, which pass data along). Networks are classified by reach. A **LAN** (local area network) connects devices within one site, such as an office floor or a data-centre rack, and is usually owned by one organisation. A **WAN** (wide area network) connects sites across cities or continents, usually over links leased from carriers, with higher latency. A **MAN** (metropolitan area network) spans a city.
+
+**The Internet** is the global network of networks: tens of thousands of independently operated networks (Internet service providers, cloud providers, companies, universities), interconnected by routers and held together by one shared protocol suite, TCP/IP, so that any host can address any other by its IP address (Section 6.3). No single organisation owns or runs it; each network decides how to route traffic to its neighbours (Section 6.15 covers the routing protocols). The **World Wide Web** is one application that runs on the Internet (Chapter 7, Section 7.1), not the Internet itself.
+
 A **network protocol stack** is a set of protocols arranged in layers, where each layer provides one service to the layer above it and uses the service of the layer below it. A **protocol** is an agreement about the format and meaning of messages and the rules for exchanging them (Chapter 1, Section 1.2). **Encapsulation** is what the sender does as data moves down the stack: each layer treats whatever it received from above as an opaque payload and prepends its own **header** (and sometimes appends a **trailer**) of control information. **Decapsulation** is the reverse at the receiver: each layer checks and removes its own header and passes the payload up.
 
 ### Why it exists
@@ -2333,6 +2337,14 @@ A strong answer must mention:
 - Read timeout: the connection was established and the request sent, but no response came in time: a slow peer, a Path MTU black hole, or an expired NAT entry.
 - Reset on an established connection: the peer or a middlebox aborted it, typically a stale pooled connection or a crashed peer; unknown host means DNS failed and no SYN was ever sent.
 *Common weak answer:* treating all of these as "network timeouts" and responding to each the same way. Each one points to a different layer and a different first check.
+
+**Q19. What is a computer network? What is the Internet? How do a LAN and a WAN differ?**
+A strong answer must mention:
+- A network: hosts and forwarding devices (switches, routers) connected by links, exchanging data through shared protocols.
+- LAN: one site, one owner, high bandwidth and low latency; WAN: long distances over carrier links, higher latency; MAN: a city.
+- The Internet: a federation of independently operated networks interconnected by routers and unified by IP addressing and the TCP/IP suite; no central owner; routing between networks by BGP (Section 6.15).
+- The Internet is not the Web: the Web is one application running on it (Chapter 7, Section 7.1).
+*Common weak answer:* "The Internet is the Web", or "a big network owned by the ISPs". It is a network of independent networks joined by common protocols; the Web is one application on top.
 
 ---
 

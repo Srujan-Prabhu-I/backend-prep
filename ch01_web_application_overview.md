@@ -93,6 +93,8 @@ Two consequences matter immediately:
 
 The **frontend** is the part of the application that runs on the user's device, typically JavaScript, HTML and CSS in a browser, or a mobile app. It is responsible for presentation, user interaction and client-side navigation. How the browser actually loads and runs it is the subject of Chapter 9.
 
+The **backend** is the part of the application that runs on servers the operator controls: the processes that receive requests from frontends and other systems, apply the business rules, store and retrieve data, and talk to other services. Users never see it directly; they see only its responses. Frontend and backend meet at an API (Section 1.4), and everything behind that API (application servers, databases, caches, queues and the infrastructure in front of them) is the backend. That territory is the subject of this book. **Full-stack** engineering means working on both sides.
+
 ### The Rule of Client Trust
 
 Because frontend code runs on hardware the user controls, **the frontend is an untrusted environment**. You must assume the "client" can be anyone, including an attacker sending hand-crafted requests with a command-line tool.
@@ -555,6 +557,14 @@ A strong answer must mention:
 - It holds copies, which can be stale. It is not the source of truth.
 - It adds failure modes (stale data; the DB is flooded if the cache goes down).
 *Common weak answer:* "A cache makes everything faster" with no mention of staleness.
+
+**Q13. What is the backend, and how does it differ from the frontend?**
+A strong answer must mention:
+- Frontend: runs on the user's device (browser or mobile app); presentation and interaction; untrusted.
+- Backend: runs on servers the operator controls; business rules, data storage, integration with other services; reached through an API.
+- The trust boundary between them: the backend re-validates everything it receives (Section 1.3).
+- Backend concerns are concurrency, durability, security, scaling and failure handling: the subject of this book.
+*Common weak answer:* "The backend is the database." It is the whole server side: application processes, data stores, caches, queues and the infrastructure in front of them.
 
 ## Scenario Exercises
 

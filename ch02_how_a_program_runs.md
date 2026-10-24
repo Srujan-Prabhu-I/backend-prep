@@ -110,6 +110,8 @@ The consequence: a core can complete several instructions per clock tick *when i
 
 The **memory hierarchy** is the arrangement of storage technologies in a computer into levels. Each level going down is **larger, cheaper per byte and slower** than the one above: registers → CPU caches (L1, L2, L3) → main memory (RAM) → solid-state drive (SSD) → hard disk drive (HDD) → remote storage across a network.
 
+**Main memory**, usually called **RAM** (random-access memory), is the computer's working memory. It holds the instructions and data of running programs; any byte can be read or written directly by its address in roughly the same time, which is what "random access" means; and it is **volatile**: its contents are lost when power is lost. Modern main memory is built from DRAM chips (described below). **Storage** (SSDs and HDDs) is the persistent level beneath it, read and written in blocks rather than bytes (Section 2.4).
+
 ### Why it exists
 
 We want memory that is huge, cheap, fast and persistent, and no single technology is all four. Fast memory (the SRAM used for caches) is expensive per bit and takes more chip area, so you can only have megabytes of it. DRAM (main memory) is cheaper and denser but slower. Flash and magnetic disks are cheaper still and **persistent** (they survive power loss) but much slower. The hierarchy combines them: keep the data you are using *right now* in the small fast levels, and everything else in the big slow ones.

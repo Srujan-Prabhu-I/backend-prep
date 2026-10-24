@@ -48,6 +48,8 @@ This chapter is the protocol itself. Every later chapter that touches the web re
 
 **HTTP** (Hypertext Transfer Protocol) is a **stateless, application-level request–response protocol**. A **client** (in HTTP terms, a **user agent**) sends a request naming a method and a target **resource**; an **origin server** (the server that owns the resource) returns a response carrying a status code, header fields and an optional body; zero or more **intermediaries** may stand between them. A **resource** is anything that can be named by a URI: a document, an order, a collection of orders, a search. HTTP's meaning is specified once, in **RFC 9110** (HTTP Semantics), and its caching in **RFC 9111**; each wire format has its own specification: **RFC 9112** (HTTP/1.1), **RFC 9113** (HTTP/2), **RFC 9114** (HTTP/3).
 
+The **World Wide Web** (the Web) is the system of linked resources (pages, images, documents, APIs) identified by URLs and transferred with HTTP. It is one application running **on** the Internet (Chapter 6, Section 6.1), alongside others such as email, DNS, remote login and video calls; the Internet is the network infrastructure that carries all of them. A **web server** serves resources over HTTP (Chapter 10, Section 10.5), and a **web browser** is the client that fetches and displays them (Chapter 9). Backend APIs use the Web's technology, HTTP and URLs, even when no browser is involved.
+
 ### Why it exists
 
 Build a distributed system directly on TCP sockets, and every pair of services must invent answers to the same questions:
@@ -1683,6 +1685,14 @@ A strong answer must mention:
 - Sticky sessions hide the problem until an instance restarts or is removed.
 - Fix: shared state in a store, or state carried in the request (a signed token).
 *Common weak answer:* "enable sticky sessions." That hides the bug until an instance restarts or is removed, and it unbalances load.
+
+**Q18. What is the difference between the Internet and the World Wide Web?**
+A strong answer must mention:
+- The Internet: the global network of interconnected networks that carries packets between hosts using IP (Chapter 6).
+- The Web: a system of linked resources identified by URLs and fetched over HTTP; one application running on the Internet.
+- Other applications use the Internet without the Web: email, DNS, SSH, video calls, online games.
+- Backend APIs use the Web's technology (HTTP, URLs) even without a browser.
+*Common weak answer:* using the two words as synonyms. The Web depends on the Internet; the Internet does not depend on the Web.
 
 ---
 

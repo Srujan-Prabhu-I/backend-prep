@@ -49,6 +49,8 @@ These mechanisms are behind some of the most common production incidents: "Too m
 
 ### Definition
 
+**I/O** (input/output) is any transfer of data between a program (the CPU and main memory) and something outside them: a storage device, a network card, a terminal, or another process. A **file** is a named, persistent sequence of bytes that the operating system stores on a storage device and lets programs read and write by position (offset); the OS's **filesystem** (Section 4.2) decides where those bytes live on the device. Files are the classic I/O resource, but not the only one.
+
 A **file descriptor (FD)** is a small non-negative integer that a process uses to refer to an open I/O resource: a file, a directory, a pipe, a network socket, a terminal or a device. The kernel hands out the number when the resource is opened, and the process passes it to every later system call (`read`, `write`, `close`) that operates on that resource.
 
 "**Everything is a file**" is the Unix design principle that lets these very different resources be used through the same small set of system calls. More precisely: everything is *accessed through a file descriptor*, and a file descriptor supports a common interface, even when the thing behind it is not a file on disk.
